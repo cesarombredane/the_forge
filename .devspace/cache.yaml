@@ -1,0 +1,17 @@
+varsEncrypted: true
+images:
+    api:
+        imageConfigHash: e27b949c4d19d56f00f765f289e50dd586e82291ef0656571993bf5eece8e8d8
+        dockerfileHash: e046e5f9bf7ce415f5f0c54f12910df09f2880c72edae6916b670a108944e8d0
+        contextHash: 6ab619c212d34c0d995ff8c752c631e276f98692071b7f840a0c97105be9c0c4
+        imageName: the-forge/api
+        tag: JSbrIlU
+    web:
+        imageConfigHash: 232d247952667acce0d531b9bc012898f81ff7e782cad67da871986ed91a1cf9
+        dockerfileHash: ed0dd62f131f97c13c441284f319683be6e7cb5bb1c57669864bfe33a540c492
+        contextHash: 6ab619c212d34c0d995ff8c752c631e276f98692071b7f840a0c97105be9c0c4
+        imageName: the-forge/web
+        tag: wcvinxW
+lastContext:
+    namespace: the-forge-dev
+    context: minikube

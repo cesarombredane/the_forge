@@ -1,0 +1,39 @@
+version: v2beta1
+
+name: the-forge
+
+images:
+  web:
+    image: the-forge/web
+    dockerfile: apps/web/Dockerfile
+    context: .
+  api:
+    image: the-forge/api
+    dockerfile: apps/api/Dockerfile
+    context: .
+
+deployments:
+  forge:
+    kubectl:
+      manifests:
+        - k8s/base/namespace.yaml
+        - k8s/base/db/secret.sample.yaml
+        - k8s/base/db/service.yaml
+        - k8s/base/db/statefulset.yaml
+        - k8s/base/api/configmap.yaml
+        - k8s/base/api/service.yaml
+        - k8s/base/api/deployment.yaml
+        - k8s/base/web/service.yaml
+        - k8s/base/web/deployment.yaml
+
+dev:
+  web:
+    labelSelector:
+      app: web
+    ports:
+      - port: "3000:3000"
+  api:
+    labelSelector:
+      app: api
+    ports:
+      - port: "3001:3001"

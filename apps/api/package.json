@@ -16,7 +16,7 @@
     "@the-forge/shared-types": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "drizzle-orm": "^0.34.1",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.21.0",
     "pg": "^8.13.0",
     "pino": "^9.4.0",

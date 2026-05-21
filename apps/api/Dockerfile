@@ -1,4 +1,6 @@
-FROM node:20-alpine AS builder
+ARG NODE_IMAGE=node:22-alpine3.22
+
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 
 RUN npm install -g pnpm@9.12.0
@@ -14,8 +16,10 @@ COPY packages/shared-types ./packages/shared-types
 
 RUN pnpm --filter @the-forge/api build
 
-FROM node:20-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
+
+RUN apk upgrade --no-cache
 
 ENV NODE_ENV=production
 ENV PORT=3001

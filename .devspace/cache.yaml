@@ -2,16 +2,16 @@ varsEncrypted: true
 images:
     api:
         imageConfigHash: e27b949c4d19d56f00f765f289e50dd586e82291ef0656571993bf5eece8e8d8
-        dockerfileHash: e046e5f9bf7ce415f5f0c54f12910df09f2880c72edae6916b670a108944e8d0
-        contextHash: aefb1e28225b3d920a3b6bd3d987a6331ac74b3ccff780471e2480ef6c88d491
+        dockerfileHash: 82312d3b368e7759d5628f67ee280d164c01e54efd344bfed3c64b5c9120e23f
+        contextHash: 1c15090d7582b97e8c9709983c3a269c75116ae9300f4b5565213257a842c343
         imageName: the-forge/api
-        tag: XldTYAl
+        tag: injCukp
     web:
         imageConfigHash: 232d247952667acce0d531b9bc012898f81ff7e782cad67da871986ed91a1cf9
-        dockerfileHash: ed0dd62f131f97c13c441284f319683be6e7cb5bb1c57669864bfe33a540c492
-        contextHash: aefb1e28225b3d920a3b6bd3d987a6331ac74b3ccff780471e2480ef6c88d491
+        dockerfileHash: 25bda8e26ae5f1233e5565def88ee23a4e3ad281212cc8576edc78c1e2276908
+        contextHash: 1c15090d7582b97e8c9709983c3a269c75116ae9300f4b5565213257a842c343
         imageName: the-forge/web
-        tag: fyAIsdh
+        tag: lYVxQpo
 lastContext:
     namespace: the-forge-dev
     context: minikube

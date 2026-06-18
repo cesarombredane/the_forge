@@ -1,0 +1,27 @@
+App / site web de tracking de perf sportive
+Système de niveau, de plus en plus d'XP nécessaire pour chaque niveau
+
+Track specifically :
+Walk
+Run
+Muscu
+
+Custom sport option for hockey football etc..
+
+Track du poid avec graph (pas d'objectif, simplement de la visualisation)
+
+Walk : nb pas par jour avec streak xp augmente avec la streak jusqu'à un cap (7 jours de streak pour être au max)
+Graph de nombre de pas par jour
+
+Run : 
+Définir une course avec 3 param (temps, distance et dénivelé) calcule de l'xp gagné en fonction de ces 3 paramètres
+
+Muscu :
+def exercices pour séances, avec param nb series visé, nb rep visé, poid visé et reel (poid différent en fonction des séries
+Xp en fonction des exos etc... 
+
+Sport custom :
+Laisser l'utilisateur définir ça
+Xp fix par complétion 
+
+Récap toutes les semaines

@@ -1,0 +1,34 @@
+# Workspace-specific agent data
+.agents/
+.codex/
+
+# Editors
+.idea/
+*.iml
+.vscode/
+
+# Dart and Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Android and Gradle
+/android/.gradle/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/local.properties
+
+# Signing material must never be committed
+*.jks
+*.keystore
+key.properties
+
+# Miscellaneous
+.DS_Store
+*.log

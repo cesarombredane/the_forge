@@ -1,14 +1,882 @@
 import 'package:flutter/material.dart';
+import 'package:the_forge/app/app_controller.dart';
+import 'package:the_forge/data/models/training.dart';
+import 'package:the_forge/features/templates/template_form_page.dart';
+import 'package:the_forge/features/workouts/workout_completion_dialog.dart';
+import 'package:the_forge/theme/app_colors.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+enum _Page { planning, templates, history }
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key, required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  _Page _page = _Page.planning;
+  DateTime _selectedDay = _dateOnly(DateTime.now());
+  DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('the Forge'),
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => Scaffold(
+        appBar: AppBar(
+          title: Text(_pageTitle),
+          actions: [
+            if (widget.controller.error != null)
+              IconButton(
+                tooltip: 'Show error',
+                onPressed: _showError,
+                icon: const Icon(
+                  Icons.error_outline,
+                  color: AppColors.moodNegative,
+                ),
+              ),
+          ],
+        ),
+        drawer: _NavigationDrawer(
+          page: _page,
+          onSelected: (page) {
+            Navigator.pop(context);
+            setState(() => _page = page);
+          },
+        ),
+        body: _body(),
+        floatingActionButton: _floatingActionButton(),
       ),
     );
   }
+
+  String get _pageTitle => switch (_page) {
+    _Page.planning => 'Planning',
+    _Page.templates => 'Templates',
+    _Page.history => 'History',
+  };
+
+  Widget _body() {
+    if (widget.controller.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return switch (_page) {
+      _Page.planning => _planningView(),
+      _Page.templates => _templatesView(),
+      _Page.history => _historyView(),
+    };
+  }
+
+  Widget? _floatingActionButton() {
+    return switch (_page) {
+      _Page.templates => FloatingActionButton.extended(
+        onPressed: () => _openTemplateForm(),
+        icon: const Icon(Icons.add),
+        label: const Text('New template'),
+      ),
+      _Page.planning => FloatingActionButton.extended(
+        onPressed: widget.controller.templates.isEmpty ? null : _schedule,
+        icon: const Icon(Icons.add),
+        label: const Text('Add to calendar'),
+      ),
+      _Page.history => null,
+    };
+  }
+
+  Widget _templatesView() {
+    final templates = widget.controller.templates;
+    if (templates.isEmpty) {
+      return _EmptyState(
+        icon: Icons.copy_all_outlined,
+        title: 'No templates yet',
+        message: 'Create a reusable training before adding it to the calendar.',
+        actionLabel: 'Create template',
+        onAction: _openTemplateForm,
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      itemCount: templates.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final template = templates[index];
+        return _TrainingCard(
+          title: template.title,
+          sport: template.sport,
+          subtitle: '${template.durationMinutes} min',
+          details: _templateDetails(template),
+          description: template.description,
+          primaryLabel: 'Schedule',
+          primaryIcon: Icons.calendar_month_outlined,
+          onPrimary: () => _schedule(template),
+          onEdit: () => _openTemplateForm(template),
+          onDelete: () => _deleteTemplate(template),
+        );
+      },
+    );
+  }
+
+  Widget _planningView() {
+    final dayWorkouts = widget.controller.planned
+        .where((workout) => _sameDay(workout.scheduledAt, _selectedDay))
+        .toList();
+    return Column(
+      children: [
+        _MonthCalendar(
+          visibleMonth: _visibleMonth,
+          selectedDay: _selectedDay,
+          workouts: widget.controller.planned,
+          onMonthChanged: (month) => setState(() => _visibleMonth = month),
+          onDaySelected: (day) => setState(() => _selectedDay = day),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _longDate(_selectedDay),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+        Expanded(
+          child: dayWorkouts.isEmpty
+              ? const Center(child: Text('No training planned for this day.'))
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                  itemCount: dayWorkouts.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final workout = dayWorkouts[index];
+                    return _TrainingCard(
+                      title: workout.title,
+                      sport: workout.sport,
+                      subtitle:
+                          '${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
+                      details: _workoutDetails(workout),
+                      description: workout.description,
+                      primaryLabel: 'Mark as done',
+                      primaryIcon: Icons.check,
+                      onPrimary: () => _complete(workout),
+                      onEdit: () => _reschedule(workout),
+                      editLabel: 'Reschedule',
+                      onDelete: () => _deleteWorkout(workout),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _historyView() {
+    final workouts = widget.controller.completed;
+    if (workouts.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.history,
+        title: 'No history yet',
+        message: 'Completed workouts will appear here.',
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: workouts.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final workout = workouts[index];
+        return _TrainingCard(
+          title: workout.title,
+          sport: workout.sport,
+          subtitle:
+              '${_shortDate(workout.scheduledAt)} at ${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
+          details: _workoutDetails(workout),
+          description: workout.description,
+          comment: workout.comment,
+          onDelete: () => _deleteWorkout(workout),
+        );
+      },
+    );
+  }
+
+  Future<void> _openTemplateForm([WorkoutTemplate? template]) async {
+    final result = await Navigator.push<WorkoutTemplate>(
+      context,
+      MaterialPageRoute(builder: (_) => TemplateFormPage(template: template)),
+    );
+    if (result != null && mounted) {
+      await _perform(() => widget.controller.saveTemplate(result));
+    }
+  }
+
+  Future<void> _schedule([WorkoutTemplate? initialTemplate]) async {
+    if (widget.controller.templates.isEmpty) {
+      setState(() => _page = _Page.templates);
+      return;
+    }
+    final result = await showDialog<_ScheduleResult>(
+      context: context,
+      builder: (_) => _ScheduleDialog(
+        templates: widget.controller.templates,
+        initialTemplate: initialTemplate,
+        initialDate: _selectedDay,
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _perform(
+      () => widget.controller.schedule(result.template, result.dateTime),
+    );
+    if (mounted) {
+      setState(() {
+        _page = _Page.planning;
+        _selectedDay = _dateOnly(result.dateTime);
+        _visibleMonth = DateTime(result.dateTime.year, result.dateTime.month);
+      });
+    }
+  }
+
+  Future<void> _reschedule(Workout workout) async {
+    final dateTime = await _pickDateTime(workout.scheduledAt);
+    if (dateTime != null && mounted) {
+      await _perform(() => widget.controller.reschedule(workout, dateTime));
+      setState(() {
+        _selectedDay = _dateOnly(dateTime);
+        _visibleMonth = DateTime(dateTime.year, dateTime.month);
+      });
+    }
+  }
+
+  Future<void> _complete(Workout workout) async {
+    final result = await showDialog<WorkoutCompletion>(
+      context: context,
+      builder: (_) => WorkoutCompletionDialog(workout: workout),
+    );
+    if (result == null || !mounted) return;
+    await _perform(
+      () => widget.controller.complete(
+        workout,
+        durationMinutes: result.durationMinutes,
+        comment: result.comment,
+        exercises: result.exercises,
+      ),
+    );
+  }
+
+  Future<void> _deleteTemplate(WorkoutTemplate template) async {
+    if (await _confirmDelete(template.title) && mounted) {
+      await _perform(() => widget.controller.deleteTemplate(template));
+    }
+  }
+
+  Future<void> _deleteWorkout(Workout workout) async {
+    if (await _confirmDelete(workout.title) && mounted) {
+      await _perform(() => widget.controller.deleteWorkout(workout));
+    }
+  }
+
+  Future<bool> _confirmDelete(String title) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete permanently?'),
+            content: Text('“$title” will be deleted.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime initial) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return null;
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (selectedTime == null) return null;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      selectedTime.hour,
+      selectedTime.minute,
+    );
+  }
+
+  Future<void> _perform(Future<void> Function() operation) async {
+    try {
+      await operation();
+    } catch (_) {
+      if (mounted) _showError();
+    }
+  }
+
+  void _showError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.controller.error ?? 'Something went wrong.'),
+      ),
+    );
+  }
+}
+
+class _NavigationDrawer extends StatelessWidget {
+  const _NavigationDrawer({required this.page, required this.onSelected});
+
+  final _Page page;
+  final ValueChanged<_Page> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            const ListTile(
+              title: Text(
+                'THE FORGE',
+                style: TextStyle(
+                  color: AppColors.yellow,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            const Divider(),
+            _item(Icons.calendar_month_outlined, 'Planning', _Page.planning),
+            _item(Icons.copy_all_outlined, 'Templates', _Page.templates),
+            _item(Icons.history, 'History', _Page.history),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _item(IconData icon, String label, _Page target) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      selected: page == target,
+      onTap: () => onSelected(target),
+    );
+  }
+}
+
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.visibleMonth,
+    required this.selectedDay,
+    required this.workouts,
+    required this.onMonthChanged,
+    required this.onDaySelected,
+  });
+
+  final DateTime visibleMonth;
+  final DateTime selectedDay;
+  final List<Workout> workouts;
+  final ValueChanged<DateTime> onMonthChanged;
+  final ValueChanged<DateTime> onDaySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = DateTime(visibleMonth.year, visibleMonth.month, 1);
+    final days = DateTime(visibleMonth.year, visibleMonth.month + 1, 0).day;
+    final offset = first.weekday - 1;
+    final cells = ((offset + days + 6) ~/ 7) * 7;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => onMonthChanged(
+                  DateTime(visibleMonth.year, visibleMonth.month - 1),
+                ),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: Text(
+                  _monthYear(visibleMonth),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(
+                onPressed: () => onMonthChanged(
+                  DateTime(visibleMonth.year, visibleMonth.month + 1),
+                ),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              for (final day in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
+                Expanded(child: Center(child: Text(day))),
+            ],
+          ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 1.05,
+            ),
+            itemCount: cells,
+            itemBuilder: (context, index) {
+              final dayNumber = index - offset + 1;
+              if (dayNumber < 1 || dayNumber > days) return const SizedBox();
+              final day = DateTime(
+                visibleMonth.year,
+                visibleMonth.month,
+                dayNumber,
+              );
+              final selected = _sameDay(day, selectedDay);
+              final today = _sameDay(day, DateTime.now());
+              final hasWorkout = workouts.any(
+                (workout) => _sameDay(workout.scheduledAt, day),
+              );
+              return InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => onDaySelected(day),
+                child: Container(
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.yellow : null,
+                    shape: BoxShape.circle,
+                    border: today
+                        ? Border.all(
+                            color: selected
+                                ? AppColors.yellowSoft
+                                : AppColors.yellow,
+                            width: 2,
+                          )
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$dayNumber',
+                        style: TextStyle(
+                          color: selected
+                              ? AppColors.background
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (hasWorkout)
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.background
+                                : AppColors.yellow,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainingCard extends StatelessWidget {
+  const _TrainingCard({
+    required this.title,
+    required this.sport,
+    required this.subtitle,
+    required this.details,
+    required this.description,
+    this.comment = '',
+    this.primaryLabel,
+    this.primaryIcon,
+    this.onPrimary,
+    this.onEdit,
+    this.editLabel = 'Edit',
+    required this.onDelete,
+  });
+
+  final String title;
+  final Sport sport;
+  final String subtitle;
+  final String details;
+  final String description;
+  final String comment;
+  final String? primaryLabel;
+  final IconData? primaryIcon;
+  final VoidCallback? onPrimary;
+  final VoidCallback? onEdit;
+  final String editLabel;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SportIcon(sport: sport),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        '${sport.label} · $subtitle',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (action) {
+                    if (action == 'edit') onEdit?.call();
+                    if (action == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => [
+                    if (onEdit != null)
+                      PopupMenuItem(value: 'edit', child: Text(editLabel)),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+              ],
+            ),
+            if (details.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(details),
+            ],
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+            if (comment.isNotEmpty) ...[
+              const Divider(height: 24),
+              Text('“$comment”'),
+            ],
+            if (onPrimary != null) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onPrimary,
+                  icon: Icon(primaryIcon),
+                  label: Text(primaryLabel!),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SportIcon extends StatelessWidget {
+  const _SportIcon({required this.sport});
+
+  final Sport sport;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (sport) {
+      Sport.gym => Icons.fitness_center,
+      Sport.running => Icons.directions_run,
+      Sport.walking => Icons.directions_walk,
+      Sport.hockey => Icons.sports_hockey,
+      Sport.mobility => Icons.self_improvement,
+    };
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: AppColors.yellow),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56, color: AppColors.textDisabled),
+            const SizedBox(height: 16),
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+            if (onAction != null) ...[
+              const SizedBox(height: 20),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleResult {
+  const _ScheduleResult(this.template, this.dateTime);
+
+  final WorkoutTemplate template;
+  final DateTime dateTime;
+}
+
+class _ScheduleDialog extends StatefulWidget {
+  const _ScheduleDialog({
+    required this.templates,
+    required this.initialTemplate,
+    required this.initialDate,
+  });
+
+  final List<WorkoutTemplate> templates;
+  final WorkoutTemplate? initialTemplate;
+  final DateTime initialDate;
+
+  @override
+  State<_ScheduleDialog> createState() => _ScheduleDialogState();
+}
+
+class _ScheduleDialogState extends State<_ScheduleDialog> {
+  late WorkoutTemplate _template;
+  late DateTime _date;
+  TimeOfDay _time = const TimeOfDay(hour: 18, minute: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _template = widget.initialTemplate ?? widget.templates.first;
+    _date = widget.initialDate;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add to calendar'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<WorkoutTemplate>(
+              initialValue: _template,
+              decoration: const InputDecoration(labelText: 'Template'),
+              items: widget.templates
+                  .map(
+                    (template) => DropdownMenuItem(
+                      value: template,
+                      child: Text(template.title),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (template) => setState(() => _template = template!),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('Date'),
+              subtitle: Text(_shortDate(_date)),
+              onTap: _pickDate,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule),
+              title: const Text('Time'),
+              subtitle: Text(_time.format(context)),
+              onTap: _pickTime,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _ScheduleResult(
+              _template,
+              DateTime(
+                _date.year,
+                _date.month,
+                _date.day,
+                _time.hour,
+                _time.minute,
+              ),
+            ),
+          ),
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final result = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (result != null) setState(() => _date = result);
+  }
+
+  Future<void> _pickTime() async {
+    final result = await showTimePicker(context: context, initialTime: _time);
+    if (result != null) setState(() => _time = result);
+  }
+}
+
+String _templateDetails(WorkoutTemplate template) {
+  return _details(
+    sport: template.sport,
+    hockeyType: template.hockeyType,
+    distanceKm: template.distanceKm,
+    cadence: template.cadence,
+    sportDetails: template.sportDetails,
+    exercises: template.exercises,
+  );
+}
+
+String _workoutDetails(Workout workout) {
+  return _details(
+    sport: workout.sport,
+    hockeyType: workout.hockeyType,
+    distanceKm: workout.distanceKm,
+    cadence: workout.cadence,
+    sportDetails: workout.sportDetails,
+    exercises: workout.exercises,
+  );
+}
+
+String _details({
+  required Sport sport,
+  required HockeySessionType? hockeyType,
+  required double? distanceKm,
+  required int? cadence,
+  required String sportDetails,
+  required List<Exercise> exercises,
+}) {
+  final lines = <String>[];
+  if (hockeyType != null) lines.add(hockeyType.label);
+  if (distanceKm != null) lines.add('${_number(distanceKm)} km');
+  if (cadence != null) lines.add('$cadence steps/min');
+  if (sportDetails.isNotEmpty) lines.add(sportDetails);
+  for (final exercise in exercises) {
+    final weight = exercise.weightKg == 0
+        ? 'bodyweight'
+        : '${_number(exercise.weightKg)} kg';
+    lines.add(
+      '${exercise.name}: ${exercise.sets} × ${exercise.reps} · $weight',
+    );
+  }
+  return lines.join('\n');
+}
+
+String _number(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value.toStringAsFixed(1);
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+bool _sameDay(DateTime first, DateTime second) =>
+    first.year == second.year &&
+    first.month == second.month &&
+    first.day == second.day;
+
+String _time(DateTime value) =>
+    '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+String _shortDate(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+String _longDate(DateTime value) {
+  const days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  return '${days[value.weekday - 1]}, ${_shortDate(value)}';
+}
+
+String _monthYear(DateTime value) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${months[value.month - 1]} ${value.year}';
 }

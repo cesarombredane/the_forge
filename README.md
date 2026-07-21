@@ -22,36 +22,39 @@ The Forge should help its user answer four simple questions:
 The core loop is:
 
 ```text
-Create a workout -> Plan it -> Complete it -> Record the result -> Build momentum
+Create a template -> Add it to the calendar -> Complete it -> Review the result
 ```
 
 ## Supported sports
 
-Each workout has shared information such as a title, sport, date, duration,
-status, notes, and optional template. A workout can also contain data specific
-to its sport:
+Each template has a title, sport, duration, and description. It also contains
+parameters specific to its sport:
 
-- **Gym:** exercises, sets, repetitions, load, rest time, and per-exercise notes
-- **Running:** duration, distance, perceived effort, route notes, and optional pace
-- **Walking:** duration, distance, perceived effort, and route notes
-- **Hockey:** duration, training or match type, position, perceived effort, and notes
-- **Mobility:** movements, body areas, duration or repetitions, difficulty, and notes
+- **Gym:** a structured exercise list with sets, repetitions, and weight or
+  additional weight
+- **Running:** distance, target cadence, and pace, route, or effort notes
+- **Walking:** distance, target cadence, and route or effort notes
+- **Hockey:** championship game, friendly game, training, coaching, or tournament,
+  plus position or session details
+- **Mobility:** movements and body areas
 
-Workout creation and editing must work for both reusable templates and individual
-planned sessions. Completing a workout stores what was really performed without
-changing the original template.
+Templates can be created, edited, deleted, and reused any number of times. Adding
+a template to the calendar creates an independent snapshot, so later template
+changes never rewrite an already planned or completed workout.
 
 ## Planning and history
 
-The planning view provides a calendar and agenda of upcoming workouts. Sessions
-can be created from scratch or from a template, moved to another date, edited,
-skipped, or marked as complete.
+The planning page provides a monthly calendar. A template can be added to an
+exact date and time, then rescheduled, deleted, or marked as complete.
 
 When completing a session, the user can adjust its actual duration and details,
-record gym loads and repetitions, and add a comment about the training. Completed
-sessions remain available in a searchable and filterable history.
+record the gym sets, repetitions, and loads actually used, and add a comment
+about the training. Completed sessions remain available in history.
 
 ## Gamification philosophy
+
+Gamification is intentionally outside the current MVP. When it is added later,
+it will follow these principles.
 
 Gamification is designed to reward consistency rather than absolute performance.
 It must remain encouraging when the user rests, gets sick, or returns after a
@@ -72,22 +75,22 @@ must be transparent, attainable, and adjustable rather than creating guilt.
 Performance-based rewards should be secondary and compare only the user with
 their previous results.
 
-## Initial scope
+## Current MVP
 
-The first useful version should provide:
+The current version focuses on the smallest complete training loop:
 
-- Local profile and preferences
-- Workout templates for all five sports
-- Creation, editing, duplication, and deletion of workouts
-- Calendar planning and rescheduling
-- Completion flow with actual results and a session comment
-- Gym exercise sets with repetitions and loads
-- Workout history and basic filters
-- Weekly goal, streaks, experience, levels, and initial consistency badges
-- Basic progress and consistency statistics
-- Reliable local persistence in SQLite
+- Create reusable templates for gym, running, walking, hockey, and mobility
+- Edit and permanently delete templates
+- Add a template snapshot to an exact calendar date and time
+- View planned workouts in a monthly calendar and reschedule or delete them
+- Record structured sport-specific parameters
+- Mark a workout as complete with its actual duration and a comment
+- Update exercises, sets, repetitions, and loads when completing a gym workout
+- Review completed workout history
+- Store everything locally and consistently in SQLite
 
-The detailed implementation roadmap is maintained in [TODO](TODO).
+Filters, statistics, profile preferences, and gamification are deliberately
+deferred until the template and planning loop is useful in daily training.
 
 ## Local data
 
@@ -116,22 +119,18 @@ lib/
 ├── app/                            Root application and app-wide state
 ├── data/
 │   ├── local/                      SQLite database and migrations
-│   ├── models/                     Workout and progression models
+│   ├── models/                     Template, workout, and exercise models
 │   └── repositories/               Reads, writes, and domain queries
 ├── features/
-│   ├── home/                       Dashboard and next workout
-│   ├── workouts/                   Templates and workout editor
-│   ├── planning/                   Calendar and agenda
-│   ├── history/                    Completed sessions
-│   ├── progress/                   Statistics and personal progress
-│   └── profile/                    Goals and preferences
+│   ├── home/                       Drawer, calendar, templates, and history
+│   ├── templates/                  Sport-specific template editor
+│   └── workouts/                   Workout completion
 ├── theme/                          Shared colors and dark theme
 └── widgets/                        Shared interface components
 ```
 
-Presentation code should not access SQLite directly. Repositories own data
-access, while domain services calculate streaks, experience, goals, and relative
-progress independently from the interface.
+Presentation code does not access SQLite directly. Repositories own template and
+workout persistence, including transactional exercise snapshots and completion.
 
 ## Development
 

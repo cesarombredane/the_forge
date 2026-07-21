@@ -44,8 +44,11 @@ changes never rewrite an already planned or completed workout.
 
 ## Planning and history
 
-The planning page provides a monthly calendar. A template can be added to an
-exact date and time, then rescheduled, deleted, or marked as complete.
+The planning page can switch between a seven-day agenda and a monthly calendar.
+The agenda groups upcoming workouts by day and explicitly labels empty days as
+rest days. The calendar shows the workouts associated with a selected date. A
+template can be added to an exact date and time, then rescheduled, deleted, or
+marked as complete.
 
 When completing a session, the user can adjust its actual duration and details,
 record the gym sets, repetitions, and loads actually used, and add a comment
@@ -82,7 +85,7 @@ The current version focuses on the smallest complete training loop:
 - Create reusable templates for gym, running, walking, hockey, and mobility
 - Edit and permanently delete templates
 - Add a template snapshot to an exact calendar date and time
-- View planned workouts in a monthly calendar and reschedule or delete them
+- View planned workouts in a seven-day list or monthly calendar
 - Record structured sport-specific parameters
 - Mark a workout as complete with its actual duration and a comment
 - Update exercises, sets, repetitions, and loads when completing a gym workout

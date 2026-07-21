@@ -18,6 +18,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.planning;
+  bool _planningCalendarView = false;
+  bool _missingTemplateBannerVisible = false;
   DateTime _selectedDay = _dateOnly(DateTime.now());
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
@@ -29,6 +31,20 @@ class _HomePageState extends State<HomePage> {
         appBar: AppBar(
           title: Text(_pageTitle),
           actions: [
+            if (_page == _Page.planning)
+              IconButton(
+                tooltip: _planningCalendarView
+                    ? 'Seven-day list'
+                    : 'Calendar view',
+                onPressed: () => setState(
+                  () => _planningCalendarView = !_planningCalendarView,
+                ),
+                icon: Icon(
+                  _planningCalendarView
+                      ? Icons.view_agenda_outlined
+                      : Icons.calendar_month_outlined,
+                ),
+              ),
             if (widget.controller.error != null)
               IconButton(
                 tooltip: 'Show error',
@@ -44,6 +60,7 @@ class _HomePageState extends State<HomePage> {
           page: _page,
           onSelected: (page) {
             Navigator.pop(context);
+            _dismissMissingTemplateMessage();
             setState(() => _page = page);
           },
         ),
@@ -64,7 +81,8 @@ class _HomePageState extends State<HomePage> {
       return const Center(child: CircularProgressIndicator());
     }
     return switch (_page) {
-      _Page.planning => _planningView(),
+      _Page.planning =>
+        _planningCalendarView ? _calendarPlanningView() : _weekPlanningView(),
       _Page.templates => _templatesView(),
       _Page.history => _historyView(),
     };
@@ -78,7 +96,7 @@ class _HomePageState extends State<HomePage> {
         label: const Text('New template'),
       ),
       _Page.planning => FloatingActionButton.extended(
-        onPressed: widget.controller.templates.isEmpty ? null : _schedule,
+        onPressed: _schedule,
         icon: const Icon(Icons.add),
         label: const Text('Add to calendar'),
       ),
@@ -119,7 +137,31 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _planningView() {
+  Widget _weekPlanningView() {
+    final today = _dateOnly(DateTime.now());
+    final days = List.generate(7, (index) => today.add(Duration(days: index)));
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      itemCount: days.length,
+      itemBuilder: (context, index) {
+        final day = days[index];
+        final workouts = widget.controller.planned
+            .where((workout) => _sameDay(workout.scheduledAt, day))
+            .toList();
+        return _PlanningDaySection(
+          day: day,
+          workouts: workouts,
+          isToday: index == 0,
+          onComplete: _complete,
+          onReschedule: _reschedule,
+          onDelete: _deleteWorkout,
+          onSchedule: () => _scheduleForDay(day),
+        );
+      },
+    );
+  }
+
+  Widget _calendarPlanningView() {
     final dayWorkouts = widget.controller.planned
         .where((workout) => _sameDay(workout.scheduledAt, _selectedDay))
         .toList();
@@ -145,7 +187,15 @@ class _HomePageState extends State<HomePage> {
         ),
         Expanded(
           child: dayWorkouts.isEmpty
-              ? const Center(child: Text('No training planned for this day.'))
+              ? const Center(
+                  child: Text(
+                    'Rest day',
+                    style: TextStyle(
+                      color: AppColors.textDisabled,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                   itemCount: dayWorkouts.length,
@@ -214,7 +264,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _schedule([WorkoutTemplate? initialTemplate]) async {
     if (widget.controller.templates.isEmpty) {
-      setState(() => _page = _Page.templates);
+      _showMissingTemplateMessage();
       return;
     }
     final result = await showDialog<_ScheduleResult>(
@@ -236,6 +286,15 @@ class _HomePageState extends State<HomePage> {
         _visibleMonth = DateTime(result.dateTime.year, result.dateTime.month);
       });
     }
+  }
+
+  void _scheduleForDay(DateTime day) {
+    if (widget.controller.templates.isEmpty) {
+      _showMissingTemplateMessage();
+      return;
+    }
+    setState(() => _selectedDay = day);
+    _schedule();
   }
 
   Future<void> _reschedule(Workout workout) async {
@@ -335,6 +394,37 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  void _showMissingTemplateMessage() {
+    if (_missingTemplateBannerVisible) return;
+    final messenger = ScaffoldMessenger.of(context);
+    _missingTemplateBannerVisible = true;
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        leading: const Icon(Icons.error_outline, color: AppColors.moodNegative),
+        content: const Text('Create a workout template before scheduling it.'),
+        backgroundColor: const Color(0xFF3A2020),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _dismissMissingTemplateMessage();
+              setState(() => _page = _Page.templates);
+            },
+            child: const Text(
+              'Go to templates',
+              style: TextStyle(color: AppColors.moodNegative),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _dismissMissingTemplateMessage() {
+    if (!_missingTemplateBannerVisible) return;
+    ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+    _missingTemplateBannerVisible = false;
+  }
 }
 
 class _NavigationDrawer extends StatelessWidget {
@@ -377,6 +467,144 @@ class _NavigationDrawer extends StatelessWidget {
       title: Text(label),
       selected: page == target,
       onTap: () => onSelected(target),
+    );
+  }
+}
+
+class _PlanningDaySection extends StatelessWidget {
+  const _PlanningDaySection({
+    required this.day,
+    required this.workouts,
+    required this.isToday,
+    required this.onComplete,
+    required this.onReschedule,
+    required this.onDelete,
+    required this.onSchedule,
+  });
+
+  final DateTime day;
+  final List<Workout> workouts;
+  final bool isToday;
+  final ValueChanged<Workout> onComplete;
+  final ValueChanged<Workout> onReschedule;
+  final ValueChanged<Workout> onDelete;
+  final VoidCallback onSchedule;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isToday ? AppColors.yellow : AppColors.surfaceRaised,
+            width: isToday ? 1.5 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isToday
+                          ? 'TODAY · ${_agendaDate(day)}'
+                          : _agendaDate(day),
+                      style: TextStyle(
+                        color: isToday
+                            ? AppColors.yellow
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Schedule on this day',
+                    onPressed: onSchedule,
+                    icon: const Icon(Icons.add, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            if (workouts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 2, 16, 16),
+                child: Text(
+                  'Rest day',
+                  style: TextStyle(
+                    color: AppColors.textDisabled,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            else
+              for (var index = 0; index < workouts.length; index++) ...[
+                if (index > 0)
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                _PlanningWorkoutTile(
+                  workout: workouts[index],
+                  onComplete: () => onComplete(workouts[index]),
+                  onReschedule: () => onReschedule(workouts[index]),
+                  onDelete: () => onDelete(workouts[index]),
+                ),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanningWorkoutTile extends StatelessWidget {
+  const _PlanningWorkoutTile({
+    required this.workout,
+    required this.onComplete,
+    required this.onReschedule,
+    required this.onDelete,
+  });
+
+  final Workout workout;
+  final VoidCallback onComplete;
+  final VoidCallback onReschedule;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.fromLTRB(12, 2, 4, 4),
+      leading: _SportIcon(sport: workout.sport, compact: true),
+      title: Text(workout.title),
+      subtitle: Text(
+        '${_time(workout.scheduledAt)} · ${workout.sport.label} · ${workout.durationMinutes} min',
+        style: const TextStyle(color: AppColors.textSecondary),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Mark as done',
+            onPressed: onComplete,
+            icon: const Icon(Icons.check_circle_outline),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (action) {
+              if (action == 'reschedule') onReschedule();
+              if (action == 'delete') onDelete();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'reschedule', child: Text('Reschedule')),
+              PopupMenuItem(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -611,9 +839,10 @@ class _TrainingCard extends StatelessWidget {
 }
 
 class _SportIcon extends StatelessWidget {
-  const _SportIcon({required this.sport});
+  const _SportIcon({required this.sport, this.compact = false});
 
   final Sport sport;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -625,8 +854,8 @@ class _SportIcon extends StatelessWidget {
       Sport.mobility => Icons.self_improvement,
     };
     return Container(
-      width: 44,
-      height: 44,
+      width: compact ? 36 : 44,
+      height: compact ? 36 : 44,
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(12),
@@ -861,6 +1090,25 @@ String _longDate(DateTime value) {
     'Sunday',
   ];
   return '${days[value.weekday - 1]}, ${_shortDate(value)}';
+}
+
+String _agendaDate(DateTime value) {
+  const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const months = [
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+  return '${days[value.weekday - 1]} ${months[value.month - 1]} ${value.day}';
 }
 
 String _monthYear(DateTime value) {

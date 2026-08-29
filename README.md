@@ -142,3 +142,39 @@ flutter pub get
 flutter analyze
 flutter run
 ```
+
+### Run on an Android device over Wi-Fi
+
+Wireless debugging requires Android 11 or later. Connect the computer and phone
+to the same Wi-Fi network, then enable **Developer options > Wireless debugging**
+on the phone.
+
+To pair the phone for the first time:
+
+1. In **Wireless debugging**, select **Pair device with pairing code**.
+2. Note the IP address, pairing port, and six-digit pairing code shown by the
+   phone.
+3. Run the following command and enter the pairing code when prompted:
+
+   ```bash
+   adb pair <phone-ip>:<pairing-port>
+   ```
+
+After pairing, return to the main **Wireless debugging** screen and note the IP
+address and port shown there. This connection port is usually different from
+the pairing port. Connect and verify the device with:
+
+```bash
+adb connect <phone-ip>:<connection-port>
+adb devices
+```
+
+The phone should now appear in `flutter devices`. Start the application with:
+
+```bash
+flutter run -d <device-id>
+```
+
+The port can change when wireless debugging is restarted, so run `adb connect`
+again with the current address shown on the phone when necessary. Pairing only
+needs to be repeated if the saved pairing is removed or no longer recognized.

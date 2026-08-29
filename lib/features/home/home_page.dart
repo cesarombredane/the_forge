@@ -1125,6 +1125,7 @@ String _templateDetails(WorkoutTemplate template) {
     cadence: template.cadence,
     sportDetails: template.sportDetails,
     exercises: template.exercises,
+    cycleCount: template.cycleCount,
   );
 }
 
@@ -1136,6 +1137,7 @@ String _workoutDetails(Workout workout) {
     cadence: workout.cadence,
     sportDetails: workout.sportDetails,
     exercises: workout.exercises,
+    cycleCount: workout.cycleCount,
   );
 }
 
@@ -1146,12 +1148,16 @@ String _details({
   required int? cadence,
   required String sportDetails,
   required List<Exercise> exercises,
+  required int cycleCount,
 }) {
   final lines = <String>[];
   if (hockeyType != null) lines.add(hockeyType.label);
   if (distanceKm != null) lines.add('${_number(distanceKm)} km');
   if (cadence != null) lines.add('$cadence steps/min');
   if (sportDetails.isNotEmpty) lines.add(sportDetails);
+  if (sport == Sport.mobility) {
+    lines.add('$cycleCount ${cycleCount == 1 ? 'cycle' : 'cycles'}');
+  }
   for (final exercise in exercises) {
     final weight = exercise.weightKg == 0
         ? 'bodyweight'
@@ -1160,7 +1166,11 @@ String _details({
         ? '${exercise.reps} reps'
         : '${exercise.reps} sec';
     final side = exercise.perSide ? ' · per side' : '';
-    lines.add('${exercise.name}: ${exercise.sets} × $amount$side · $weight');
+    if (sport == Sport.mobility) {
+      lines.add('${exercise.name}: $amount$side');
+    } else {
+      lines.add('${exercise.name}: ${exercise.sets} × $amount$side · $weight');
+    }
   }
   return lines.join('\n');
 }

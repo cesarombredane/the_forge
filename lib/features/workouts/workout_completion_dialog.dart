@@ -80,7 +80,9 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
               if (_exercises.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text(
-                  'Actual gym loads',
+                  widget.workout.sport == Sport.mobility
+                      ? 'Cycle movements · ${widget.workout.cycleCount} cycles'
+                      : 'Actual gym loads',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
@@ -88,7 +90,12 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(_exercises[index].name),
-                    subtitle: Text(_summary(_exercises[index])),
+                    subtitle: Text(
+                      _summary(
+                        _exercises[index],
+                        mobility: widget.workout.sport == Sport.mobility,
+                      ),
+                    ),
                     trailing: const Icon(Icons.edit_outlined),
                     onTap: () => _editExercise(index),
                   ),
@@ -125,6 +132,7 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
     final weight = TextEditingController(text: exercise.weightKg.toString());
     var unit = exercise.unit;
     var perSide = exercise.perSide;
+    final mobility = widget.workout.sport == Sport.mobility;
     final key = GlobalKey<FormState>();
     final result = await showDialog<Exercise>(
       context: context,
@@ -152,18 +160,24 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
                       setDialogState(() => unit = selection.first),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _positiveField(sets, 'Sets')),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _positiveField(
-                        reps,
-                        unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                if (mobility)
+                  _positiveField(
+                    reps,
+                    unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(child: _positiveField(sets, 'Sets')),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _positiveField(
+                          reps,
+                          unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Per side'),
@@ -171,21 +185,23 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
                   onChanged: (value) => setDialogState(() => perSide = value!),
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: weight,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
+                if (!mobility) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: weight,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Weight / additional weight',
+                      suffixText: 'kg',
+                    ),
+                    validator: (value) => double.tryParse(value ?? '') == null
+                        ? 'Enter a number'
+                        : null,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Weight / additional weight',
-                    suffixText: 'kg',
-                  ),
-                  validator: (value) => double.tryParse(value ?? '') == null
-                      ? 'Enter a number'
-                      : null,
-                ),
+                ],
               ],
             ),
           ),
@@ -200,9 +216,9 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
                 Navigator.pop(
                   context,
                   exercise.copyWith(
-                    sets: int.parse(sets.text),
+                    sets: mobility ? 1 : int.parse(sets.text),
                     reps: int.parse(reps.text),
-                    weightKg: double.parse(weight.text),
+                    weightKg: mobility ? 0 : double.parse(weight.text),
                     unit: unit,
                     perSide: perSide,
                   ),
@@ -245,7 +261,7 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
   }
 }
 
-String _summary(Exercise exercise) {
+String _summary(Exercise exercise, {required bool mobility}) {
   final weight = exercise.weightKg == 0
       ? 'bodyweight'
       : '${exercise.weightKg.toStringAsFixed(1)} kg';
@@ -253,5 +269,7 @@ String _summary(Exercise exercise) {
       ? '${exercise.reps} reps'
       : '${exercise.reps} sec';
   final side = exercise.perSide ? ' · per side' : '';
-  return '${exercise.sets} × $amount$side · $weight';
+  return mobility
+      ? '$amount$side'
+      : '${exercise.sets} × $amount$side · $weight';
 }

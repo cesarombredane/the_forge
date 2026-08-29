@@ -19,6 +19,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   late final TextEditingController _distance;
   late final TextEditingController _cadence;
   late final TextEditingController _sportDetails;
+  late final TextEditingController _cycles;
   late Sport _sport;
   HockeySessionType _hockeyType = HockeySessionType.training;
   late List<Exercise> _exercises;
@@ -38,6 +39,9 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     );
     _cadence = TextEditingController(text: template?.cadence?.toString() ?? '');
     _sportDetails = TextEditingController(text: template?.sportDetails ?? '');
+    _cycles = TextEditingController(
+      text: template?.cycleCount.toString() ?? '1',
+    );
     _sport = template?.sport ?? Sport.gym;
     _hockeyType = template?.hockeyType ?? HockeySessionType.training;
     _exercises = List.of(template?.exercises ?? const []);
@@ -52,6 +56,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     _distance.dispose();
     _cadence.dispose();
     _sportDetails.dispose();
+    _cycles.dispose();
     super.dispose();
   }
 
@@ -79,8 +84,15 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
                     )
                     .toList(),
                 onChanged: (sport) => setState(() {
+                  final previousSport = _sport;
                   _sport = sport!;
-                  if (_sport != Sport.gym) _exercises.clear();
+                  if (previousSport != _sport &&
+                      (previousSport == Sport.gym ||
+                          previousSport == Sport.mobility ||
+                          _sport == Sport.gym ||
+                          _sport == Sport.mobility)) {
+                    _exercises.clear();
+                  }
                 }),
               ),
               const SizedBox(height: 16),
@@ -120,17 +132,19 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
                   alignLabelWithHint: true,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _warmup,
-                minLines: 2,
-                maxLines: 5,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Warm-up instructions',
-                  alignLabelWithHint: true,
+              if (_sport != Sport.mobility) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _warmup,
+                  minLines: 2,
+                  maxLines: 5,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Warm-up instructions',
+                    alignLabelWithHint: true,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 24),
               ..._sportFields(),
               const SizedBox(height: 32),
@@ -148,58 +162,16 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
 
   List<Widget> _sportFields() {
     return switch (_sport) {
-      Sport.gym => [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Exercises',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => _editExercise(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add'),
-            ),
-          ],
+      Sport.gym => _exerciseFields(mobility: false),
+      Sport.mobility => [
+        TextFormField(
+          controller: _cycles,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Number of cycles'),
+          validator: _positiveInt,
         ),
-        if (_exercises.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Text('No exercises yet. Add the first exercise.'),
-          ),
-        if (_exercises.isNotEmpty)
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            itemCount: _exercises.length,
-            onReorderItem: _reorderExercise,
-            itemBuilder: (context, index) {
-              final exercise = _exercises[index];
-              return Card(
-                key: ObjectKey(exercise),
-                child: ListTile(
-                  leading: ReorderableDragStartListener(
-                    index: index,
-                    child: const Tooltip(
-                      message: 'Drag to reorder',
-                      child: Icon(Icons.drag_handle),
-                    ),
-                  ),
-                  title: Text(exercise.name),
-                  subtitle: Text(_exerciseSummary(exercise)),
-                  onTap: () => _editExercise(index),
-                  trailing: IconButton(
-                    tooltip: 'Remove exercise',
-                    onPressed: () => setState(() => _exercises.removeAt(index)),
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-                ),
-              );
-            },
-          ),
+        const SizedBox(height: 16),
+        ..._exerciseFields(mobility: true),
       ],
       Sport.hockey => [
         DropdownButtonFormField<HockeySessionType>(
@@ -225,20 +197,62 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
         detailsLabel: 'Pace, route or effort notes',
       ),
       Sport.walking => _distanceFields(detailsLabel: 'Route or effort notes'),
-      Sport.mobility => [
-        TextFormField(
-          controller: _sportDetails,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: 'Movements and body areas',
-            hintText: 'Hip flexors, shoulders, ankle mobility…',
-            alignLabelWithHint: true,
-          ),
-        ),
-      ],
     };
   }
+
+  List<Widget> _exerciseFields({required bool mobility}) => [
+    Row(
+      children: [
+        Expanded(
+          child: Text(
+            mobility ? 'Cycle movements' : 'Exercises',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () => _editExercise(mobility: mobility),
+          icon: const Icon(Icons.add),
+          label: const Text('Add'),
+        ),
+      ],
+    ),
+    if (_exercises.isEmpty)
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Text('No movements yet. Add the first movement.'),
+      ),
+    if (_exercises.isNotEmpty)
+      ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: _exercises.length,
+        onReorderItem: _reorderExercise,
+        itemBuilder: (context, index) {
+          final exercise = _exercises[index];
+          return Card(
+            key: ObjectKey(exercise),
+            child: ListTile(
+              leading: ReorderableDragStartListener(
+                index: index,
+                child: const Tooltip(
+                  message: 'Drag to reorder',
+                  child: Icon(Icons.drag_handle),
+                ),
+              ),
+              title: Text(exercise.name),
+              subtitle: Text(_exerciseSummary(exercise, mobility: mobility)),
+              onTap: () => _editExercise(index: index, mobility: mobility),
+              trailing: IconButton(
+                tooltip: 'Remove exercise',
+                onPressed: () => setState(() => _exercises.removeAt(index)),
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ),
+          );
+        },
+      ),
+  ];
 
   List<Widget> _distanceFields({required String detailsLabel}) => [
     TextFormField(
@@ -272,12 +286,17 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     ),
   ];
 
-  Future<void> _editExercise([int? index]) async {
+  Future<void> _editExercise({int? index, required bool mobility}) async {
+    FocusScope.of(context).unfocus();
     final result = await showDialog<Exercise>(
       context: context,
-      builder: (_) =>
-          _ExerciseDialog(exercise: index == null ? null : _exercises[index]),
+      builder: (_) => _ExerciseDialog(
+        exercise: index == null ? null : _exercises[index],
+        mobility: mobility,
+      ),
     );
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
     if (result == null) return;
     setState(() {
       if (index == null) {
@@ -297,9 +316,10 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    if (_sport == Sport.gym && _exercises.isEmpty) {
+    if ((_sport == Sport.gym || _sport == Sport.mobility) &&
+        _exercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one gym exercise.')),
+        const SnackBar(content: Text('Add at least one exercise.')),
       );
       return;
     }
@@ -311,7 +331,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
         sport: _sport,
         durationMinutes: int.parse(_duration.text),
         description: _description.text.trim(),
-        warmup: _warmup.text.trim(),
+        warmup: _sport == Sport.mobility ? '' : _warmup.text.trim(),
         hockeyType: _sport == Sport.hockey ? _hockeyType : null,
         distanceKm: _sport == Sport.running || _sport == Sport.walking
             ? double.tryParse(_distance.text)
@@ -319,8 +339,13 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
         cadence: _sport == Sport.running || _sport == Sport.walking
             ? int.tryParse(_cadence.text)
             : null,
-        sportDetails: _sport == Sport.gym ? '' : _sportDetails.text.trim(),
-        exercises: _sport == Sport.gym ? _exercises : const [],
+        sportDetails: _sport == Sport.gym || _sport == Sport.mobility
+            ? ''
+            : _sportDetails.text.trim(),
+        exercises: _sport == Sport.gym || _sport == Sport.mobility
+            ? _exercises
+            : const [],
+        cycleCount: _sport == Sport.mobility ? int.parse(_cycles.text) : 1,
       ),
     );
   }
@@ -339,12 +364,18 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     final number = int.tryParse(value);
     return number == null || number <= 0 ? 'Enter a positive number' : null;
   }
+
+  String? _positiveInt(String? value) {
+    final number = int.tryParse(value ?? '');
+    return number == null || number <= 0 ? 'Enter a number above 0' : null;
+  }
 }
 
 class _ExerciseDialog extends StatefulWidget {
-  const _ExerciseDialog({this.exercise});
+  const _ExerciseDialog({this.exercise, required this.mobility});
 
   final Exercise? exercise;
+  final bool mobility;
 
   @override
   State<_ExerciseDialog> createState() => _ExerciseDialogState();
@@ -413,18 +444,24 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
                     setState(() => _unit = selection.first),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _numberField(_sets, 'Sets')),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _numberField(
-                      _reps,
-                      _unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+              if (widget.mobility)
+                _numberField(
+                  _reps,
+                  _unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(child: _numberField(_sets, 'Sets')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _numberField(
+                        _reps,
+                        _unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Per side'),
@@ -432,22 +469,24 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
                 onChanged: (value) => setState(() => _perSide = value!),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _weight,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
+              if (!widget.mobility) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _weight,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Weight / additional weight',
+                    suffixText: 'kg',
+                  ),
+                  validator: (value) {
+                    final number = double.tryParse(value ?? '');
+                    return number == null ? 'Enter a number' : null;
+                  },
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Weight / additional weight',
-                  suffixText: 'kg',
-                ),
-                validator: (value) {
-                  final number = double.tryParse(value ?? '');
-                  return number == null ? 'Enter a number' : null;
-                },
-              ),
+              ],
             ],
           ),
         ),
@@ -480,9 +519,9 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
       context,
       Exercise(
         name: _name.text.trim(),
-        sets: int.parse(_sets.text),
+        sets: widget.mobility ? 1 : int.parse(_sets.text),
         reps: int.parse(_reps.text),
-        weightKg: double.parse(_weight.text),
+        weightKg: widget.mobility ? 0 : double.parse(_weight.text),
         unit: _unit,
         perSide: _perSide,
       ),
@@ -490,7 +529,7 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
   }
 }
 
-String _exerciseSummary(Exercise exercise) {
+String _exerciseSummary(Exercise exercise, {required bool mobility}) {
   final weight = exercise.weightKg == 0
       ? 'bodyweight'
       : '${_compactNumber(exercise.weightKg)} kg';
@@ -498,7 +537,9 @@ String _exerciseSummary(Exercise exercise) {
       ? '${exercise.reps} reps'
       : '${exercise.reps} sec';
   final side = exercise.perSide ? ' · per side' : '';
-  return '${exercise.sets} × $amount$side · $weight';
+  return mobility
+      ? '$amount$side'
+      : '${exercise.sets} × $amount$side · $weight';
 }
 
 String _compactNumber(double value) {

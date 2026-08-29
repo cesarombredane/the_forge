@@ -12,18 +12,20 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 4,
+      version: 5,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
         await _addTemplateSchema(database);
         await _addWarmupAndExerciseOptions(database);
         await _addWeightSchema(database);
+        await _addMobilityCycles(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
         if (oldVersion < 3) await _addWarmupAndExerciseOptions(database);
         if (oldVersion < 4) await _addWeightSchema(database);
+        if (oldVersion < 5) await _addMobilityCycles(database);
       },
     );
   }
@@ -154,6 +156,33 @@ class AppDatabase {
         minute INTEGER NOT NULL CHECK(minute BETWEEN 0 AND 59)
       )
     ''');
+  }
+
+  Future<void> _addMobilityCycles(Database database) async {
+    await _addColumnIfMissing(
+      database,
+      table: 'templates',
+      column: 'cycle_count',
+      definition: 'INTEGER NOT NULL DEFAULT 1 CHECK(cycle_count > 0)',
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'cycle_count',
+      definition: 'INTEGER NOT NULL DEFAULT 1 CHECK(cycle_count > 0)',
+    );
+    await database.update(
+      'templates',
+      {'warmup': ''},
+      where: 'sport = ?',
+      whereArgs: ['mobility'],
+    );
+    await database.update(
+      'workouts',
+      {'warmup': ''},
+      where: 'sport = ?',
+      whereArgs: ['mobility'],
+    );
   }
 
   Future<void> _addColumnIfMissing(

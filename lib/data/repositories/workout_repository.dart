@@ -40,6 +40,7 @@ class WorkoutRepository {
         cadence: template.cadence,
         sportDetails: template.sportDetails,
         exercises: template.exercises,
+        cycleCount: template.cycleCount,
       );
       final values = workout.toMap()..remove('id');
       final workoutId = await transaction.insert('workouts', values);

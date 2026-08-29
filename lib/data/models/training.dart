@@ -94,6 +94,7 @@ class WorkoutTemplate {
     this.cadence,
     this.sportDetails = '',
     this.exercises = const [],
+    this.cycleCount = 1,
   });
 
   final int? id;
@@ -107,6 +108,7 @@ class WorkoutTemplate {
   final int? cadence;
   final String sportDetails;
   final List<Exercise> exercises;
+  final int cycleCount;
 
   Map<String, Object?> toMap() => {
     'id': id,
@@ -119,6 +121,7 @@ class WorkoutTemplate {
     'distance_km': distanceKm,
     'cadence': cadence,
     'sport_details': sportDetails,
+    'cycle_count': cycleCount,
   };
 
   factory WorkoutTemplate.fromMap(
@@ -139,6 +142,7 @@ class WorkoutTemplate {
       cadence: map['cadence'] as int?,
       sportDetails: map['sport_details'] as String,
       exercises: exercises,
+      cycleCount: map['cycle_count'] as int? ?? 1,
     );
   }
 }
@@ -161,6 +165,7 @@ class Workout {
     this.exercises = const [],
     this.comment = '',
     this.completedAt,
+    this.cycleCount = 1,
   });
 
   final int? id;
@@ -179,6 +184,7 @@ class Workout {
   final List<Exercise> exercises;
   final String comment;
   final DateTime? completedAt;
+  final int cycleCount;
 
   Map<String, Object?> toMap() => {
     'id': id,
@@ -196,6 +202,7 @@ class Workout {
     'hockey_type': hockeyType?.name,
     'distance_km': distanceKm,
     'cadence': cadence,
+    'cycle_count': cycleCount,
   };
 
   factory Workout.fromMap(
@@ -223,6 +230,7 @@ class Workout {
       completedAt: map['completed_at'] == null
           ? null
           : DateTime.parse(map['completed_at'] as String),
+      cycleCount: map['cycle_count'] as int? ?? 1,
     );
   }
 }

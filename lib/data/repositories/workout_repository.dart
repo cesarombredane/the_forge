@@ -33,6 +33,7 @@ class WorkoutRepository {
         scheduledAt: scheduledAt,
         durationMinutes: template.durationMinutes,
         description: template.description,
+        warmup: template.warmup,
         status: WorkoutStatus.planned,
         hockeyType: template.hockeyType,
         distanceKm: template.distanceKm,
@@ -99,6 +100,8 @@ class WorkoutRepository {
             sets: row['sets'] as int,
             reps: row['reps'] as int,
             weightKg: (row['weight_kg'] as num).toDouble(),
+            unit: ExerciseUnit.values.byName(row['unit'] as String),
+            perSide: (row['per_side'] as int) == 1,
           ),
         )
         .toList();
@@ -123,6 +126,8 @@ class WorkoutRepository {
         'sets': exercise.sets,
         'reps': exercise.reps,
         'weight_kg': exercise.weightKg,
+        'unit': exercise.unit.name,
+        'per_side': exercise.perSide ? 1 : 0,
       });
     }
   }

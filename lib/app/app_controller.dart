@@ -2,18 +2,24 @@ import 'package:flutter/foundation.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/data/repositories/template_repository.dart';
 import 'package:the_forge/data/repositories/workout_repository.dart';
+import 'package:the_forge/data/repositories/weight_repository.dart';
 
 class AppController extends ChangeNotifier {
   AppController({
     TemplateRepository? templateRepository,
     WorkoutRepository? workoutRepository,
+    WeightRepository? weightRepository,
   }) : _templateRepository = templateRepository ?? TemplateRepository(),
-       _workoutRepository = workoutRepository ?? WorkoutRepository();
+       _workoutRepository = workoutRepository ?? WorkoutRepository(),
+       _weightRepository = weightRepository ?? WeightRepository();
 
   final TemplateRepository _templateRepository;
   final WorkoutRepository _workoutRepository;
+  final WeightRepository _weightRepository;
   final List<WorkoutTemplate> _templates = [];
   final List<Workout> _workouts = [];
+  final List<WeightEntry> _weightEntries = [];
+  WeightReminder? _weightReminder;
   bool _loading = true;
   String? _error;
 
@@ -26,6 +32,8 @@ class AppController extends ChangeNotifier {
       .toList()
       .reversed
       .toList();
+  List<WeightEntry> get weightEntries => List.unmodifiable(_weightEntries);
+  WeightReminder? get weightReminder => _weightReminder;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -82,6 +90,25 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  Future<void> addWeight(double weightKg, {DateTime? recordedAt}) {
+    return _run(
+      () => _weightRepository.add(weightKg, recordedAt ?? DateTime.now()),
+    );
+  }
+
+  Future<void> deleteWeight(WeightEntry entry) {
+    if (entry.id == null) return Future.value();
+    return _run(() => _weightRepository.delete(entry.id!));
+  }
+
+  Future<void> saveWeightReminder(WeightReminder reminder) {
+    return _run(() => _weightRepository.saveReminder(reminder));
+  }
+
+  Future<void> removeWeightReminder() {
+    return _run(_weightRepository.removeReminder);
+  }
+
   Future<void> _run(Future<void> Function() operation) async {
     try {
       _error = null;
@@ -98,6 +125,8 @@ class AppController extends ChangeNotifier {
     final results = await Future.wait([
       _templateRepository.getAll(),
       _workoutRepository.getAll(),
+      _weightRepository.getAll(),
+      _weightRepository.getReminder(),
     ]);
     _templates
       ..clear()
@@ -105,6 +134,10 @@ class AppController extends ChangeNotifier {
     _workouts
       ..clear()
       ..addAll(results[1] as List<Workout>);
+    _weightEntries
+      ..clear()
+      ..addAll(results[2] as List<WeightEntry>);
+    _weightReminder = results[3] as WeightReminder?;
     notifyListeners();
   }
 }

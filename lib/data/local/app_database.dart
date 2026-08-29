@@ -12,14 +12,18 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 2,
+      version: 4,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
         await _addTemplateSchema(database);
+        await _addWarmupAndExerciseOptions(database);
+        await _addWeightSchema(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
+        if (oldVersion < 3) await _addWarmupAndExerciseOptions(database);
+        if (oldVersion < 4) await _addWeightSchema(database);
       },
     );
   }
@@ -89,5 +93,81 @@ class AppDatabase {
     await database.execute('ALTER TABLE workouts ADD COLUMN hockey_type TEXT');
     await database.execute('ALTER TABLE workouts ADD COLUMN distance_km REAL');
     await database.execute('ALTER TABLE workouts ADD COLUMN cadence INTEGER');
+  }
+
+  Future<void> _addWarmupAndExerciseOptions(Database database) async {
+    await _addColumnIfMissing(
+      database,
+      table: 'templates',
+      column: 'warmup',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'warmup',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'template_exercises',
+      column: 'unit',
+      definition: "TEXT NOT NULL DEFAULT 'reps'",
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'template_exercises',
+      column: 'per_side',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workout_exercises',
+      column: 'unit',
+      definition: "TEXT NOT NULL DEFAULT 'reps'",
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workout_exercises',
+      column: 'per_side',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+
+  Future<void> _addWeightSchema(Database database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS weight_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        weight_kg REAL NOT NULL CHECK(weight_kg > 0),
+        recorded_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE INDEX IF NOT EXISTS weight_recorded_at_index
+      ON weight_entries(recorded_at)
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS weight_reminder (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        weekday INTEGER NOT NULL CHECK(weekday BETWEEN 1 AND 7),
+        hour INTEGER NOT NULL CHECK(hour BETWEEN 0 AND 23),
+        minute INTEGER NOT NULL CHECK(minute BETWEEN 0 AND 59)
+      )
+    ''');
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database database, {
+    required String table,
+    required String column,
+    required String definition,
+  }) async {
+    final columns = await database.rawQuery('PRAGMA table_info($table)');
+    final exists = columns.any((row) => row['name'] == column);
+    if (!exists) {
+      await database.execute(
+        'ALTER TABLE $table ADD COLUMN $column $definition',
+      );
+    }
   }
 }

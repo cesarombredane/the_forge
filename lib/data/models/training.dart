@@ -10,25 +10,73 @@ enum HockeySessionType {
 
 enum WorkoutStatus { planned, completed }
 
+enum ExerciseUnit { reps, seconds }
+
+class WeightEntry {
+  const WeightEntry({
+    this.id,
+    required this.weightKg,
+    required this.recordedAt,
+  });
+
+  final int? id;
+  final double weightKg;
+  final DateTime recordedAt;
+
+  factory WeightEntry.fromMap(Map<String, Object?> map) => WeightEntry(
+    id: map['id'] as int,
+    weightKg: (map['weight_kg'] as num).toDouble(),
+    recordedAt: DateTime.parse(map['recorded_at'] as String),
+  );
+}
+
+class WeightReminder {
+  const WeightReminder({
+    required this.weekday,
+    required this.hour,
+    required this.minute,
+  });
+
+  final int weekday;
+  final int hour;
+  final int minute;
+
+  DateTime scheduledOn(DateTime day) =>
+      DateTime(day.year, day.month, day.day, hour, minute);
+}
+
 class Exercise {
   const Exercise({
     required this.name,
     required this.sets,
     required this.reps,
     required this.weightKg,
+    this.unit = ExerciseUnit.reps,
+    this.perSide = false,
   });
 
   final String name;
   final int sets;
   final int reps;
   final double weightKg;
+  final ExerciseUnit unit;
+  final bool perSide;
 
-  Exercise copyWith({String? name, int? sets, int? reps, double? weightKg}) {
+  Exercise copyWith({
+    String? name,
+    int? sets,
+    int? reps,
+    double? weightKg,
+    ExerciseUnit? unit,
+    bool? perSide,
+  }) {
     return Exercise(
       name: name ?? this.name,
       sets: sets ?? this.sets,
       reps: reps ?? this.reps,
       weightKg: weightKg ?? this.weightKg,
+      unit: unit ?? this.unit,
+      perSide: perSide ?? this.perSide,
     );
   }
 }
@@ -40,6 +88,7 @@ class WorkoutTemplate {
     required this.sport,
     required this.durationMinutes,
     required this.description,
+    this.warmup = '',
     this.hockeyType,
     this.distanceKm,
     this.cadence,
@@ -52,6 +101,7 @@ class WorkoutTemplate {
   final Sport sport;
   final int durationMinutes;
   final String description;
+  final String warmup;
   final HockeySessionType? hockeyType;
   final double? distanceKm;
   final int? cadence;
@@ -64,6 +114,7 @@ class WorkoutTemplate {
     'sport': sport.name,
     'duration_minutes': durationMinutes,
     'description': description,
+    'warmup': warmup,
     'hockey_type': hockeyType?.name,
     'distance_km': distanceKm,
     'cadence': cadence,
@@ -80,6 +131,7 @@ class WorkoutTemplate {
       sport: Sport.values.byName(map['sport'] as String),
       durationMinutes: map['duration_minutes'] as int,
       description: map['description'] as String,
+      warmup: map['warmup'] as String? ?? '',
       hockeyType: map['hockey_type'] == null
           ? null
           : HockeySessionType.values.byName(map['hockey_type'] as String),
@@ -100,6 +152,7 @@ class Workout {
     required this.scheduledAt,
     required this.durationMinutes,
     required this.description,
+    this.warmup = '',
     required this.status,
     this.hockeyType,
     this.distanceKm,
@@ -117,6 +170,7 @@ class Workout {
   final DateTime scheduledAt;
   final int durationMinutes;
   final String description;
+  final String warmup;
   final WorkoutStatus status;
   final HockeySessionType? hockeyType;
   final double? distanceKm;
@@ -134,6 +188,7 @@ class Workout {
     'scheduled_at': scheduledAt.toIso8601String(),
     'duration_minutes': durationMinutes,
     'notes': description,
+    'warmup': warmup,
     'details': sportDetails,
     'status': status.name,
     'comment': comment,
@@ -155,6 +210,7 @@ class Workout {
       scheduledAt: DateTime.parse(map['scheduled_at'] as String),
       durationMinutes: map['duration_minutes'] as int,
       description: map['notes'] as String,
+      warmup: map['warmup'] as String? ?? '',
       status: WorkoutStatus.values.byName(map['status'] as String),
       hockeyType: map['hockey_type'] == null
           ? null

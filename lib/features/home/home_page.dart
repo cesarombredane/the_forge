@@ -3,9 +3,10 @@ import 'package:the_forge/app/app_controller.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/features/templates/template_form_page.dart';
 import 'package:the_forge/features/workouts/workout_completion_dialog.dart';
+import 'package:the_forge/features/weight/weight_page.dart';
 import 'package:the_forge/theme/app_colors.dart';
 
-enum _Page { planning, templates, history }
+enum _Page { planning, templates, history, weight }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -74,6 +75,7 @@ class _HomePageState extends State<HomePage> {
     _Page.planning => 'Planning',
     _Page.templates => 'Templates',
     _Page.history => 'History',
+    _Page.weight => 'Weight',
   };
 
   Widget _body() {
@@ -85,6 +87,7 @@ class _HomePageState extends State<HomePage> {
         _planningCalendarView ? _calendarPlanningView() : _weekPlanningView(),
       _Page.templates => _templatesView(),
       _Page.history => _historyView(),
+      _Page.weight => WeightPage(controller: widget.controller),
     };
   }
 
@@ -101,6 +104,7 @@ class _HomePageState extends State<HomePage> {
         label: const Text('Add to calendar'),
       ),
       _Page.history => null,
+      _Page.weight => null,
     };
   }
 
@@ -127,6 +131,7 @@ class _HomePageState extends State<HomePage> {
           subtitle: '${template.durationMinutes} min',
           details: _templateDetails(template),
           description: template.description,
+          warmup: template.warmup,
           primaryLabel: 'Schedule',
           primaryIcon: Icons.calendar_month_outlined,
           onPrimary: () => _schedule(template),
@@ -156,6 +161,8 @@ class _HomePageState extends State<HomePage> {
           onReschedule: _reschedule,
           onDelete: _deleteWorkout,
           onSchedule: () => _scheduleForDay(day),
+          weightReminder: _reminderForDay(day),
+          onWeighIn: _recordWeight,
         );
       },
     );
@@ -171,6 +178,7 @@ class _HomePageState extends State<HomePage> {
           visibleMonth: _visibleMonth,
           selectedDay: _selectedDay,
           workouts: widget.controller.planned,
+          weightReminder: widget.controller.weightReminder,
           onMonthChanged: (month) => setState(() => _visibleMonth = month),
           onDaySelected: (day) => setState(() => _selectedDay = day),
         ),
@@ -186,7 +194,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         Expanded(
-          child: dayWorkouts.isEmpty
+          child: dayWorkouts.isEmpty && _reminderForDay(_selectedDay) == null
               ? const Center(
                   child: Text(
                     'Rest day',
@@ -196,27 +204,37 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 )
-              : ListView.separated(
+              : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                  itemCount: dayWorkouts.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final workout = dayWorkouts[index];
-                    return _TrainingCard(
-                      title: workout.title,
-                      sport: workout.sport,
-                      subtitle:
-                          '${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
-                      details: _workoutDetails(workout),
-                      description: workout.description,
-                      primaryLabel: 'Mark as done',
-                      primaryIcon: Icons.check,
-                      onPrimary: () => _complete(workout),
-                      onEdit: () => _reschedule(workout),
-                      editLabel: 'Reschedule',
-                      onDelete: () => _deleteWorkout(workout),
-                    );
-                  },
+                  children: [
+                    if (_reminderForDay(_selectedDay) case final reminder?) ...[
+                      _WeightReminderTile(
+                        scheduledAt: reminder.scheduledOn(_selectedDay),
+                        onWeighIn: _sameDay(_selectedDay, DateTime.now())
+                            ? _recordWeight
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    for (final workout in dayWorkouts) ...[
+                      _TrainingCard(
+                        title: workout.title,
+                        sport: workout.sport,
+                        subtitle:
+                            '${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
+                        details: _workoutDetails(workout),
+                        description: workout.description,
+                        warmup: workout.warmup,
+                        primaryLabel: 'Mark as done',
+                        primaryIcon: Icons.check,
+                        onPrimary: () => _complete(workout),
+                        onEdit: () => _reschedule(workout),
+                        editLabel: 'Reschedule',
+                        onDelete: () => _deleteWorkout(workout),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
                 ),
         ),
       ],
@@ -245,6 +263,7 @@ class _HomePageState extends State<HomePage> {
               '${_shortDate(workout.scheduledAt)} at ${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
           details: _workoutDetails(workout),
           description: workout.description,
+          warmup: workout.warmup,
           comment: workout.comment,
           onDelete: () => _deleteWorkout(workout),
         );
@@ -322,6 +341,21 @@ class _HomePageState extends State<HomePage> {
         exercises: result.exercises,
       ),
     );
+  }
+
+  Future<void> _recordWeight() async {
+    final weight = await showWeightEntryDialog(
+      context,
+      initialWeight: widget.controller.weightEntries.firstOrNull?.weightKg,
+    );
+    if (weight != null && mounted) {
+      await _perform(() => widget.controller.addWeight(weight));
+    }
+  }
+
+  WeightReminder? _reminderForDay(DateTime day) {
+    final reminder = widget.controller.weightReminder;
+    return reminder?.weekday == day.weekday ? reminder : null;
   }
 
   Future<void> _deleteTemplate(WorkoutTemplate template) async {
@@ -455,6 +489,7 @@ class _NavigationDrawer extends StatelessWidget {
             _item(Icons.calendar_month_outlined, 'Planning', _Page.planning),
             _item(Icons.copy_all_outlined, 'Templates', _Page.templates),
             _item(Icons.history, 'History', _Page.history),
+            _item(Icons.monitor_weight_outlined, 'Weight', _Page.weight),
           ],
         ),
       ),
@@ -480,6 +515,8 @@ class _PlanningDaySection extends StatelessWidget {
     required this.onReschedule,
     required this.onDelete,
     required this.onSchedule,
+    required this.weightReminder,
+    required this.onWeighIn,
   });
 
   final DateTime day;
@@ -489,6 +526,8 @@ class _PlanningDaySection extends StatelessWidget {
   final ValueChanged<Workout> onReschedule;
   final ValueChanged<Workout> onDelete;
   final VoidCallback onSchedule;
+  final WeightReminder? weightReminder;
+  final VoidCallback onWeighIn;
 
   @override
   Widget build(BuildContext context) {
@@ -533,7 +572,7 @@ class _PlanningDaySection extends StatelessWidget {
                 ],
               ),
             ),
-            if (workouts.isEmpty)
+            if (workouts.isEmpty && weightReminder == null)
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 2, 16, 16),
                 child: Text(
@@ -544,9 +583,14 @@ class _PlanningDaySection extends StatelessWidget {
                   ),
                 ),
               )
-            else
+            else ...[
+              if (weightReminder != null)
+                _WeightReminderTile(
+                  scheduledAt: weightReminder!.scheduledOn(day),
+                  onWeighIn: _sameDay(day, DateTime.now()) ? onWeighIn : null,
+                ),
               for (var index = 0; index < workouts.length; index++) ...[
-                if (index > 0)
+                if (index > 0 || weightReminder != null)
                   const Divider(height: 1, indent: 16, endIndent: 16),
                 _PlanningWorkoutTile(
                   workout: workouts[index],
@@ -555,6 +599,7 @@ class _PlanningDaySection extends StatelessWidget {
                   onDelete: () => onDelete(workouts[index]),
                 ),
               ],
+            ],
           ],
         ),
       ),
@@ -609,11 +654,52 @@ class _PlanningWorkoutTile extends StatelessWidget {
   }
 }
 
+class _WeightReminderTile extends StatelessWidget {
+  const _WeightReminderTile({
+    required this.scheduledAt,
+    required this.onWeighIn,
+  });
+
+  final DateTime scheduledAt;
+  final VoidCallback? onWeighIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.fromLTRB(12, 2, 8, 4),
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(
+          Icons.monitor_weight_outlined,
+          color: AppColors.yellow,
+        ),
+      ),
+      title: const Text('Weekly weigh-in'),
+      subtitle: Text(
+        _time(scheduledAt),
+        style: const TextStyle(color: AppColors.textSecondary),
+      ),
+      trailing: onWeighIn == null
+          ? null
+          : FilledButton(
+              onPressed: onWeighIn,
+              child: const Text('Enter weight'),
+            ),
+    );
+  }
+}
+
 class _MonthCalendar extends StatelessWidget {
   const _MonthCalendar({
     required this.visibleMonth,
     required this.selectedDay,
     required this.workouts,
+    required this.weightReminder,
     required this.onMonthChanged,
     required this.onDaySelected,
   });
@@ -621,6 +707,7 @@ class _MonthCalendar extends StatelessWidget {
   final DateTime visibleMonth;
   final DateTime selectedDay;
   final List<Workout> workouts;
+  final WeightReminder? weightReminder;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDaySelected;
 
@@ -684,6 +771,7 @@ class _MonthCalendar extends StatelessWidget {
               final hasWorkout = workouts.any(
                 (workout) => _sameDay(workout.scheduledAt, day),
               );
+              final hasWeightReminder = weightReminder?.weekday == day.weekday;
               return InkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => onDaySelected(day),
@@ -712,7 +800,7 @@ class _MonthCalendar extends StatelessWidget {
                               : AppColors.textPrimary,
                         ),
                       ),
-                      if (hasWorkout)
+                      if (hasWorkout || hasWeightReminder)
                         Container(
                           width: 4,
                           height: 4,
@@ -742,6 +830,7 @@ class _TrainingCard extends StatelessWidget {
     required this.subtitle,
     required this.details,
     required this.description,
+    required this.warmup,
     this.comment = '',
     this.primaryLabel,
     this.primaryIcon,
@@ -756,6 +845,7 @@ class _TrainingCard extends StatelessWidget {
   final String subtitle;
   final String details;
   final String description;
+  final String warmup;
   final String comment;
   final String? primaryLabel;
   final IconData? primaryIcon;
@@ -813,6 +903,15 @@ class _TrainingCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 description,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+            if (warmup.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Warm-up', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                warmup,
                 style: const TextStyle(color: AppColors.textSecondary),
               ),
             ],
@@ -1057,9 +1156,11 @@ String _details({
     final weight = exercise.weightKg == 0
         ? 'bodyweight'
         : '${_number(exercise.weightKg)} kg';
-    lines.add(
-      '${exercise.name}: ${exercise.sets} × ${exercise.reps} · $weight',
-    );
+    final amount = exercise.unit == ExerciseUnit.reps
+        ? '${exercise.reps} reps'
+        : '${exercise.reps} sec';
+    final side = exercise.perSide ? ' · per side' : '';
+    lines.add('${exercise.name}: ${exercise.sets} × $amount$side · $weight');
   }
   return lines.join('\n');
 }

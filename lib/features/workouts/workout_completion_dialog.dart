@@ -57,6 +57,12 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.workout.warmup.isNotEmpty) ...[
+                Text('Warm-up', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(widget.workout.warmup),
+                const SizedBox(height: 20),
+              ],
               TextFormField(
                 controller: _duration,
                 keyboardType: TextInputType.number,
@@ -117,63 +123,95 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
     final sets = TextEditingController(text: exercise.sets.toString());
     final reps = TextEditingController(text: exercise.reps.toString());
     final weight = TextEditingController(text: exercise.weightKg.toString());
+    var unit = exercise.unit;
+    var perSide = exercise.perSide;
     final key = GlobalKey<FormState>();
     final result = await showDialog<Exercise>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(exercise.name),
-        content: Form(
-          key: key,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _positiveField(sets, 'Sets')),
-                  const SizedBox(width: 12),
-                  Expanded(child: _positiveField(reps, 'Reps')),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: weight,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(exercise.name),
+          content: Form(
+            key: key,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SegmentedButton<ExerciseUnit>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ExerciseUnit.reps,
+                      label: Text('Reps'),
+                    ),
+                    ButtonSegment(
+                      value: ExerciseUnit.seconds,
+                      label: Text('Time'),
+                    ),
+                  ],
+                  selected: {unit},
+                  onSelectionChanged: (selection) =>
+                      setDialogState(() => unit = selection.first),
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Weight / additional weight',
-                  suffixText: 'kg',
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _positiveField(sets, 'Sets')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _positiveField(
+                        reps,
+                        unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+                      ),
+                    ),
+                  ],
                 ),
-                validator: (value) {
-                  final number = double.tryParse(value ?? '');
-                  return number == null || number < 0
-                      ? 'Enter 0 or more'
-                      : null;
-                },
-              ),
-            ],
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Per side'),
+                  value: perSide,
+                  onChanged: (value) => setDialogState(() => perSide = value!),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: weight,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Weight / additional weight',
+                    suffixText: 'kg',
+                  ),
+                  validator: (value) => double.tryParse(value ?? '') == null
+                      ? 'Enter a number'
+                      : null,
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!key.currentState!.validate()) return;
+                Navigator.pop(
+                  context,
+                  exercise.copyWith(
+                    sets: int.parse(sets.text),
+                    reps: int.parse(reps.text),
+                    weightKg: double.parse(weight.text),
+                    unit: unit,
+                    perSide: perSide,
+                  ),
+                );
+              },
+              child: const Text('Apply'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!key.currentState!.validate()) return;
-              Navigator.pop(
-                context,
-                exercise.copyWith(
-                  sets: int.parse(sets.text),
-                  reps: int.parse(reps.text),
-                  weightKg: double.parse(weight.text),
-                ),
-              );
-            },
-            child: const Text('Apply'),
-          ),
-        ],
       ),
     );
     sets.dispose();
@@ -211,5 +249,9 @@ String _summary(Exercise exercise) {
   final weight = exercise.weightKg == 0
       ? 'bodyweight'
       : '${exercise.weightKg.toStringAsFixed(1)} kg';
-  return '${exercise.sets} × ${exercise.reps} · $weight';
+  final amount = exercise.unit == ExerciseUnit.reps
+      ? '${exercise.reps} reps'
+      : '${exercise.reps} sec';
+  final side = exercise.perSide ? ' · per side' : '';
+  return '${exercise.sets} × $amount$side · $weight';
 }

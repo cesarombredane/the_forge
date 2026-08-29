@@ -5,9 +5,10 @@ import 'package:the_forge/features/templates/template_form_page.dart';
 import 'package:the_forge/features/steps/steps_page.dart';
 import 'package:the_forge/features/workouts/workout_completion_dialog.dart';
 import 'package:the_forge/features/weight/weight_page.dart';
+import 'package:the_forge/features/weekly_plan/weekly_plan_page.dart';
 import 'package:the_forge/theme/app_colors.dart';
 
-enum _Page { planning, templates, history, weight, steps }
+enum _Page { planning, templates, history, weight, steps, weeklyPlan }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -78,6 +79,7 @@ class _HomePageState extends State<HomePage> {
     _Page.history => 'History',
     _Page.weight => 'Weight',
     _Page.steps => 'Steps',
+    _Page.weeklyPlan => 'Weekly plan',
   };
 
   Widget _body() {
@@ -91,6 +93,10 @@ class _HomePageState extends State<HomePage> {
       _Page.history => _historyView(),
       _Page.weight => WeightPage(controller: widget.controller),
       _Page.steps => StepsPage(controller: widget.controller),
+      _Page.weeklyPlan => WeeklyPlanPage(
+        controller: widget.controller,
+        onSchedule: _scheduleWeeklyRequirement,
+      ),
     };
   }
 
@@ -109,6 +115,7 @@ class _HomePageState extends State<HomePage> {
       _Page.history => null,
       _Page.weight => null,
       _Page.steps => null,
+      _Page.weeklyPlan => null,
     };
   }
 
@@ -149,26 +156,36 @@ class _HomePageState extends State<HomePage> {
   Widget _weekPlanningView() {
     final today = _dateOnly(DateTime.now());
     final days = List.generate(7, (index) => today.add(Duration(days: index)));
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-      itemCount: days.length,
-      itemBuilder: (context, index) {
-        final day = days[index];
-        final workouts = widget.controller.planned
-            .where((workout) => _sameDay(workout.scheduledAt, day))
-            .toList();
-        return _PlanningDaySection(
-          day: day,
-          workouts: workouts,
-          isToday: index == 0,
-          onComplete: _complete,
-          onReschedule: _reschedule,
-          onDelete: _deleteWorkout,
-          onSchedule: () => _scheduleForDay(day),
-          weightReminder: _reminderForDay(day),
-          onWeighIn: _recordWeight,
-        );
-      },
+    return Column(
+      children: [
+        _WeeklyPlanAlert(
+          controller: widget.controller,
+          onOpen: () => setState(() => _page = _Page.weeklyPlan),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+            itemCount: days.length,
+            itemBuilder: (context, index) {
+              final day = days[index];
+              final workouts = widget.controller.planned
+                  .where((workout) => _sameDay(workout.scheduledAt, day))
+                  .toList();
+              return _PlanningDaySection(
+                day: day,
+                workouts: workouts,
+                isToday: index == 0,
+                onComplete: _complete,
+                onReschedule: _reschedule,
+                onDelete: _deleteWorkout,
+                onSchedule: () => _scheduleForDay(day),
+                weightReminder: _reminderForDay(day),
+                onWeighIn: _recordWeight,
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -178,6 +195,10 @@ class _HomePageState extends State<HomePage> {
         .toList();
     return Column(
       children: [
+        _WeeklyPlanAlert(
+          controller: widget.controller,
+          onOpen: () => setState(() => _page = _Page.weeklyPlan),
+        ),
         _MonthCalendar(
           visibleMonth: _visibleMonth,
           selectedDay: _selectedDay,
@@ -309,6 +330,15 @@ class _HomePageState extends State<HomePage> {
         _visibleMonth = DateTime(result.dateTime.year, result.dateTime.month);
       });
     }
+  }
+
+  void _scheduleWeeklyRequirement(WorkoutTemplate template) {
+    final today = _dateOnly(DateTime.now());
+    setState(() {
+      _selectedDay = today;
+      _visibleMonth = DateTime(today.year, today.month);
+    });
+    _schedule(template);
   }
 
   void _scheduleForDay(DateTime day) {
@@ -495,6 +525,7 @@ class _NavigationDrawer extends StatelessWidget {
             _item(Icons.history, 'History', _Page.history),
             _item(Icons.monitor_weight_outlined, 'Weight', _Page.weight),
             _item(Icons.directions_walk, 'Steps', _Page.steps),
+            _item(Icons.checklist, 'Weekly plan', _Page.weeklyPlan),
           ],
         ),
       ),
@@ -507,6 +538,50 @@ class _NavigationDrawer extends StatelessWidget {
       title: Text(label),
       selected: page == target,
       onTap: () => onSelected(target),
+    );
+  }
+}
+
+class _WeeklyPlanAlert extends StatelessWidget {
+  const _WeeklyPlanAlert({required this.controller, required this.onOpen});
+
+  final AppController controller;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final missing = controller.weeklyRequirements
+        .map(
+          (requirement) => (
+            requirement: requirement,
+            progress: weeklyRequirementProgress(controller, requirement),
+          ),
+        )
+        .where((item) => !item.progress.satisfied)
+        .toList();
+    if (missing.isEmpty) return const SizedBox.shrink();
+    final totalMissing = missing.fold(
+      0,
+      (total, item) => total + item.progress.missing,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Card(
+        color: AppColors.surfaceRaised,
+        child: ListTile(
+          leading: const Icon(Icons.pending_actions, color: AppColors.yellow),
+          title: Text(
+            '$totalMissing weekly ${totalMissing == 1 ? 'workout is' : 'workouts are'} still missing',
+          ),
+          subtitle: Text(
+            missing.map((item) => item.requirement.name).join(', '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: TextButton(onPressed: onOpen, child: const Text('Review')),
+          onTap: onOpen,
+        ),
+      ),
     );
   }
 }
@@ -1126,7 +1201,7 @@ String _templateDetails(WorkoutTemplate template) {
     sport: template.sport,
     hockeyType: template.hockeyType,
     distanceKm: template.distanceKm,
-    cadence: template.cadence,
+    durationMinutes: template.durationMinutes,
     sportDetails: template.sportDetails,
     exercises: template.exercises,
     cycleCount: template.cycleCount,
@@ -1138,7 +1213,7 @@ String _workoutDetails(Workout workout) {
     sport: workout.sport,
     hockeyType: workout.hockeyType,
     distanceKm: workout.distanceKm,
-    cadence: workout.cadence,
+    durationMinutes: workout.durationMinutes,
     sportDetails: workout.sportDetails,
     exercises: workout.exercises,
     cycleCount: workout.cycleCount,
@@ -1149,7 +1224,7 @@ String _details({
   required Sport sport,
   required HockeySessionType? hockeyType,
   required double? distanceKm,
-  required int? cadence,
+  required int durationMinutes,
   required String sportDetails,
   required List<Exercise> exercises,
   required int cycleCount,
@@ -1157,7 +1232,9 @@ String _details({
   final lines = <String>[];
   if (hockeyType != null) lines.add(hockeyType.label);
   if (distanceKm != null) lines.add('${_number(distanceKm)} km');
-  if (cadence != null) lines.add('$cadence steps/min');
+  if (sport == Sport.running && distanceKm != null && distanceKm > 0) {
+    lines.add('${_pace(durationMinutes, distanceKm)} min/km target pace');
+  }
   if (sportDetails.isNotEmpty) lines.add(sportDetails);
   if (sport == Sport.mobility) {
     lines.add('$cycleCount ${cycleCount == 1 ? 'cycle' : 'cycles'}');
@@ -1182,6 +1259,13 @@ String _details({
 String _number(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(1);
+
+String _pace(int durationMinutes, double distanceKm) {
+  final secondsPerKm = (durationMinutes * 60 / distanceKm).round();
+  final minutes = secondsPerKm ~/ 60;
+  final seconds = secondsPerKm % 60;
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);

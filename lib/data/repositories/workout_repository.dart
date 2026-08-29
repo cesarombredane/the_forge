@@ -37,7 +37,6 @@ class WorkoutRepository {
         status: WorkoutStatus.planned,
         hockeyType: template.hockeyType,
         distanceKm: template.distanceKm,
-        cadence: template.cadence,
         sportDetails: template.sportDetails,
         exercises: template.exercises,
         cycleCount: template.cycleCount,

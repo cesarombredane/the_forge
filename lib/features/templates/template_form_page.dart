@@ -17,7 +17,6 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   late final TextEditingController _description;
   late final TextEditingController _warmup;
   late final TextEditingController _distance;
-  late final TextEditingController _cadence;
   late final TextEditingController _sportDetails;
   late final TextEditingController _cycles;
   late Sport _sport;
@@ -37,7 +36,6 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     _distance = TextEditingController(
       text: template?.distanceKm?.toString() ?? '',
     );
-    _cadence = TextEditingController(text: template?.cadence?.toString() ?? '');
     _sportDetails = TextEditingController(text: template?.sportDetails ?? '');
     _cycles = TextEditingController(
       text: template?.cycleCount.toString() ?? '1',
@@ -54,7 +52,6 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     _description.dispose();
     _warmup.dispose();
     _distance.dispose();
-    _cadence.dispose();
     _sportDetails.dispose();
     _cycles.dispose();
     super.dispose();
@@ -110,6 +107,9 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
               TextFormField(
                 controller: _duration,
                 keyboardType: TextInputType.number,
+                onChanged: (_) {
+                  if (_sport == Sport.running) setState(() {});
+                },
                 decoration: const InputDecoration(
                   labelText: 'Duration',
                   suffixText: 'minutes',
@@ -132,7 +132,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
                   alignLabelWithHint: true,
                 ),
               ),
-              if (_sport != Sport.mobility) ...[
+              if (_sport != Sport.mobility && _sport != Sport.running) ...[
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _warmup,
@@ -193,9 +193,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
           ),
         ),
       ],
-      Sport.running => _distanceFields(
-        detailsLabel: 'Pace, route or effort notes',
-      ),
+      Sport.running => _runningFields(),
     };
   }
 
@@ -253,34 +251,26 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
       ),
   ];
 
-  List<Widget> _distanceFields({required String detailsLabel}) => [
+  List<Widget> _runningFields() => [
     TextFormField(
       controller: _distance,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (_) => setState(() {}),
       decoration: const InputDecoration(
         labelText: 'Distance',
         suffixText: 'km',
       ),
-      validator: _optionalPositiveDouble,
+      validator: _positiveDouble,
     ),
     const SizedBox(height: 16),
-    TextFormField(
-      controller: _cadence,
-      keyboardType: TextInputType.number,
+    InputDecorator(
       decoration: const InputDecoration(
-        labelText: 'Target cadence',
-        suffixText: 'steps/min',
+        labelText: 'Target pace',
+        suffixText: 'min/km',
       ),
-      validator: _optionalPositiveInt,
-    ),
-    const SizedBox(height: 16),
-    TextFormField(
-      controller: _sportDetails,
-      minLines: 2,
-      maxLines: 5,
-      decoration: InputDecoration(
-        labelText: detailsLabel,
-        alignLabelWithHint: true,
+      child: Text(
+        _runningPace() ?? 'Enter a valid duration and distance',
+        style: TextStyle(color: _runningPace() == null ? Colors.grey : null),
       ),
     ),
   ];
@@ -330,15 +320,14 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
         sport: _sport,
         durationMinutes: int.parse(_duration.text),
         description: _description.text.trim(),
-        warmup: _sport == Sport.mobility ? '' : _warmup.text.trim(),
+        warmup: _sport == Sport.mobility || _sport == Sport.running
+            ? ''
+            : _warmup.text.trim(),
         hockeyType: _sport == Sport.hockey ? _hockeyType : null,
         distanceKm: _sport == Sport.running
             ? double.tryParse(_distance.text)
             : null,
-        cadence: _sport == Sport.running ? int.tryParse(_cadence.text) : null,
-        sportDetails: _sport == Sport.gym || _sport == Sport.mobility
-            ? ''
-            : _sportDetails.text.trim(),
+        sportDetails: _sport == Sport.hockey ? _sportDetails.text.trim() : '',
         exercises: _sport == Sport.gym || _sport == Sport.mobility
             ? _exercises
             : const [],
@@ -350,21 +339,29 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'This field is required' : null;
 
-  String? _optionalPositiveDouble(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final number = double.tryParse(value);
-    return number == null || number <= 0 ? 'Enter a positive number' : null;
-  }
-
-  String? _optionalPositiveInt(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final number = int.tryParse(value);
-    return number == null || number <= 0 ? 'Enter a positive number' : null;
+  String? _positiveDouble(String? value) {
+    final number = double.tryParse(value ?? '');
+    return number == null || number <= 0 ? 'Enter a number above 0' : null;
   }
 
   String? _positiveInt(String? value) {
     final number = int.tryParse(value ?? '');
     return number == null || number <= 0 ? 'Enter a number above 0' : null;
+  }
+
+  String? _runningPace() {
+    final duration = int.tryParse(_duration.text);
+    final distance = double.tryParse(_distance.text);
+    if (duration == null ||
+        duration <= 0 ||
+        distance == null ||
+        distance <= 0) {
+      return null;
+    }
+    final secondsPerKm = (duration * 60 / distance).round();
+    final minutes = secondsPerKm ~/ 60;
+    final seconds = secondsPerKm % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 

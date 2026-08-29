@@ -49,7 +49,16 @@ class TemplateRepository {
 
   Future<void> delete(int id) async {
     final database = await _appDatabase.database;
-    await database.delete('templates', where: 'id = ?', whereArgs: [id]);
+    await database.transaction((transaction) async {
+      await transaction.delete('templates', where: 'id = ?', whereArgs: [id]);
+      await transaction.execute('''
+        DELETE FROM weekly_requirements
+        WHERE NOT EXISTS (
+          SELECT 1 FROM weekly_requirement_templates
+          WHERE requirement_id = weekly_requirements.id
+        )
+      ''');
+    });
   }
 
   Future<List<Exercise>> _getExercises(

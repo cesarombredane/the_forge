@@ -32,7 +32,7 @@ parameters specific to its sport:
 
 - **Gym:** a structured exercise list with sets, repetitions, and weight or
   additional weight
-- **Running:** distance, target cadence, and pace, route, or effort notes
+- **Running:** duration and distance, with target pace calculated automatically
 - **Hockey:** championship game, friendly game, training, coaching, or tournament,
   plus position or session details
 - **Mobility:** repeatable cycles of movements measured in repetitions or time
@@ -52,6 +52,10 @@ The agenda groups upcoming workouts by day and explicitly labels empty days as
 rest days. The calendar shows the workouts associated with a selected date. A
 template can be added to an exact date and time, then rescheduled, deleted, or
 marked as complete.
+
+The weekly plan is a flexible Monday-to-Sunday checklist. A requirement can
+target one template or accept any workout from a group of templates, and
+Planning highlights requirements that still need workouts scheduled.
 
 When completing a session, the user can adjust its actual duration and details,
 record the gym sets, repetitions, and loads actually used, and add a comment
@@ -89,6 +93,7 @@ The current version focuses on the smallest complete training loop:
 - Edit and permanently delete templates
 - Add a template snapshot to an exact calendar date and time
 - View planned workouts in a seven-day list or monthly calendar
+- Define flexible weekly workout requirements and review missing sessions
 - Record structured sport-specific parameters
 - Mark a workout as complete with its actual duration and a comment
 - Update exercises, sets, repetitions, and loads when completing a gym workout

@@ -4,6 +4,7 @@ import 'package:the_forge/data/repositories/template_repository.dart';
 import 'package:the_forge/data/repositories/step_repository.dart';
 import 'package:the_forge/data/repositories/workout_repository.dart';
 import 'package:the_forge/data/repositories/weight_repository.dart';
+import 'package:the_forge/data/repositories/weekly_requirement_repository.dart';
 
 class AppController extends ChangeNotifier {
   AppController({
@@ -11,21 +12,26 @@ class AppController extends ChangeNotifier {
     WorkoutRepository? workoutRepository,
     WeightRepository? weightRepository,
     StepRepository? stepRepository,
+    WeeklyRequirementRepository? weeklyRequirementRepository,
   }) : _templateRepository = templateRepository ?? TemplateRepository(),
        _workoutRepository = workoutRepository ?? WorkoutRepository(),
        _weightRepository = weightRepository ?? WeightRepository(),
-       _stepRepository = stepRepository ?? StepRepository();
+       _stepRepository = stepRepository ?? StepRepository(),
+       _weeklyRequirementRepository =
+           weeklyRequirementRepository ?? WeeklyRequirementRepository();
 
   final TemplateRepository _templateRepository;
   final WorkoutRepository _workoutRepository;
   final WeightRepository _weightRepository;
   final StepRepository _stepRepository;
+  final WeeklyRequirementRepository _weeklyRequirementRepository;
   final List<WorkoutTemplate> _templates = [];
   final List<Workout> _workouts = [];
   final List<WeightEntry> _weightEntries = [];
   WeightReminder? _weightReminder;
   final List<StepEntry> _stepEntries = [];
   int? _dailyStepGoal;
+  final List<WeeklyRequirement> _weeklyRequirements = [];
   bool _loading = true;
   String? _error;
 
@@ -42,6 +48,9 @@ class AppController extends ChangeNotifier {
   WeightReminder? get weightReminder => _weightReminder;
   List<StepEntry> get stepEntries => List.unmodifiable(_stepEntries);
   int? get dailyStepGoal => _dailyStepGoal;
+  List<WeeklyRequirement> get weeklyRequirements =>
+      List.unmodifiable(_weeklyRequirements);
+  List<Workout> get workouts => List.unmodifiable(_workouts);
   bool get loading => _loading;
   String? get error => _error;
 
@@ -125,6 +134,15 @@ class AppController extends ChangeNotifier {
     return _run(() => _stepRepository.saveDailyGoal(dailyGoal));
   }
 
+  Future<void> saveWeeklyRequirement(WeeklyRequirement requirement) {
+    return _run(() => _weeklyRequirementRepository.save(requirement));
+  }
+
+  Future<void> deleteWeeklyRequirement(WeeklyRequirement requirement) {
+    if (requirement.id == null) return Future.value();
+    return _run(() => _weeklyRequirementRepository.delete(requirement.id!));
+  }
+
   Future<void> _run(Future<void> Function() operation) async {
     try {
       _error = null;
@@ -145,6 +163,7 @@ class AppController extends ChangeNotifier {
       _weightRepository.getReminder(),
       _stepRepository.getAll(),
       _stepRepository.getDailyGoal(),
+      _weeklyRequirementRepository.getAll(),
     ]);
     _templates
       ..clear()
@@ -160,6 +179,9 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..addAll(results[4] as List<StepEntry>);
     _dailyStepGoal = results[5] as int?;
+    _weeklyRequirements
+      ..clear()
+      ..addAll(results[6] as List<WeeklyRequirement>);
     notifyListeners();
   }
 }

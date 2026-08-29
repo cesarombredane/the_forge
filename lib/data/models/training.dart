@@ -57,6 +57,20 @@ class StepEntry {
   );
 }
 
+class WeeklyRequirement {
+  const WeeklyRequirement({
+    this.id,
+    required this.name,
+    required this.targetCount,
+    required this.templateIds,
+  });
+
+  final int? id;
+  final String name;
+  final int targetCount;
+  final List<int> templateIds;
+}
+
 class Exercise {
   const Exercise({
     required this.name,
@@ -103,7 +117,6 @@ class WorkoutTemplate {
     this.warmup = '',
     this.hockeyType,
     this.distanceKm,
-    this.cadence,
     this.sportDetails = '',
     this.exercises = const [],
     this.cycleCount = 1,
@@ -117,7 +130,6 @@ class WorkoutTemplate {
   final String warmup;
   final HockeySessionType? hockeyType;
   final double? distanceKm;
-  final int? cadence;
   final String sportDetails;
   final List<Exercise> exercises;
   final int cycleCount;
@@ -131,7 +143,6 @@ class WorkoutTemplate {
     'warmup': warmup,
     'hockey_type': hockeyType?.name,
     'distance_km': distanceKm,
-    'cadence': cadence,
     'sport_details': sportDetails,
     'cycle_count': cycleCount,
   };
@@ -151,7 +162,6 @@ class WorkoutTemplate {
           ? null
           : HockeySessionType.values.byName(map['hockey_type'] as String),
       distanceKm: (map['distance_km'] as num?)?.toDouble(),
-      cadence: map['cadence'] as int?,
       sportDetails: map['sport_details'] as String,
       exercises: exercises,
       cycleCount: map['cycle_count'] as int? ?? 1,
@@ -172,7 +182,6 @@ class Workout {
     required this.status,
     this.hockeyType,
     this.distanceKm,
-    this.cadence,
     this.sportDetails = '',
     this.exercises = const [],
     this.comment = '',
@@ -191,7 +200,6 @@ class Workout {
   final WorkoutStatus status;
   final HockeySessionType? hockeyType;
   final double? distanceKm;
-  final int? cadence;
   final String sportDetails;
   final List<Exercise> exercises;
   final String comment;
@@ -213,7 +221,6 @@ class Workout {
     'completed_at': completedAt?.toIso8601String(),
     'hockey_type': hockeyType?.name,
     'distance_km': distanceKm,
-    'cadence': cadence,
     'cycle_count': cycleCount,
   };
 
@@ -235,7 +242,6 @@ class Workout {
           ? null
           : HockeySessionType.values.byName(map['hockey_type'] as String),
       distanceKm: (map['distance_km'] as num?)?.toDouble(),
-      cadence: map['cadence'] as int?,
       sportDetails: map['details'] as String,
       exercises: exercises,
       comment: map['comment'] as String,

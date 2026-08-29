@@ -57,7 +57,9 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.workout.warmup.isNotEmpty) ...[
+              if (widget.workout.sport != Sport.running &&
+                  widget.workout.sport != Sport.mobility &&
+                  widget.workout.warmup.isNotEmpty) ...[
                 Text('Warm-up', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text(widget.workout.warmup),

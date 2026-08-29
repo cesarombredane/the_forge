@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/data/repositories/template_repository.dart';
+import 'package:the_forge/data/repositories/step_repository.dart';
 import 'package:the_forge/data/repositories/workout_repository.dart';
 import 'package:the_forge/data/repositories/weight_repository.dart';
 
@@ -9,17 +10,22 @@ class AppController extends ChangeNotifier {
     TemplateRepository? templateRepository,
     WorkoutRepository? workoutRepository,
     WeightRepository? weightRepository,
+    StepRepository? stepRepository,
   }) : _templateRepository = templateRepository ?? TemplateRepository(),
        _workoutRepository = workoutRepository ?? WorkoutRepository(),
-       _weightRepository = weightRepository ?? WeightRepository();
+       _weightRepository = weightRepository ?? WeightRepository(),
+       _stepRepository = stepRepository ?? StepRepository();
 
   final TemplateRepository _templateRepository;
   final WorkoutRepository _workoutRepository;
   final WeightRepository _weightRepository;
+  final StepRepository _stepRepository;
   final List<WorkoutTemplate> _templates = [];
   final List<Workout> _workouts = [];
   final List<WeightEntry> _weightEntries = [];
   WeightReminder? _weightReminder;
+  final List<StepEntry> _stepEntries = [];
+  int? _dailyStepGoal;
   bool _loading = true;
   String? _error;
 
@@ -34,6 +40,8 @@ class AppController extends ChangeNotifier {
       .toList();
   List<WeightEntry> get weightEntries => List.unmodifiable(_weightEntries);
   WeightReminder? get weightReminder => _weightReminder;
+  List<StepEntry> get stepEntries => List.unmodifiable(_stepEntries);
+  int? get dailyStepGoal => _dailyStepGoal;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -109,6 +117,14 @@ class AppController extends ChangeNotifier {
     return _run(_weightRepository.removeReminder);
   }
 
+  Future<void> saveSteps(DateTime day, int steps) {
+    return _run(() => _stepRepository.save(day, steps));
+  }
+
+  Future<void> saveDailyStepGoal(int dailyGoal) {
+    return _run(() => _stepRepository.saveDailyGoal(dailyGoal));
+  }
+
   Future<void> _run(Future<void> Function() operation) async {
     try {
       _error = null;
@@ -127,6 +143,8 @@ class AppController extends ChangeNotifier {
       _workoutRepository.getAll(),
       _weightRepository.getAll(),
       _weightRepository.getReminder(),
+      _stepRepository.getAll(),
+      _stepRepository.getDailyGoal(),
     ]);
     _templates
       ..clear()
@@ -138,6 +156,10 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..addAll(results[2] as List<WeightEntry>);
     _weightReminder = results[3] as WeightReminder?;
+    _stepEntries
+      ..clear()
+      ..addAll(results[4] as List<StepEntry>);
+    _dailyStepGoal = results[5] as int?;
     notifyListeners();
   }
 }

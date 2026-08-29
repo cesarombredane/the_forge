@@ -12,7 +12,7 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 5,
+      version: 7,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
@@ -20,12 +20,15 @@ class AppDatabase {
         await _addWarmupAndExerciseOptions(database);
         await _addWeightSchema(database);
         await _addMobilityCycles(database);
+        await _addStepsSchema(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
         if (oldVersion < 3) await _addWarmupAndExerciseOptions(database);
         if (oldVersion < 4) await _addWeightSchema(database);
         if (oldVersion < 5) await _addMobilityCycles(database);
+        if (oldVersion < 6) await _removeUnsupportedWorkoutSports(database);
+        if (oldVersion < 7) await _addStepsSchema(database);
       },
     );
   }
@@ -183,6 +186,36 @@ class AppDatabase {
       where: 'sport = ?',
       whereArgs: ['mobility'],
     );
+  }
+
+  Future<void> _removeUnsupportedWorkoutSports(Database database) async {
+    const supportedSports = ['gym', 'running', 'hockey', 'mobility'];
+    final placeholders = List.filled(supportedSports.length, '?').join(', ');
+    await database.delete(
+      'workouts',
+      where: 'sport NOT IN ($placeholders)',
+      whereArgs: supportedSports,
+    );
+    await database.delete(
+      'templates',
+      where: 'sport NOT IN ($placeholders)',
+      whereArgs: supportedSports,
+    );
+  }
+
+  Future<void> _addStepsSchema(Database database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS step_entries (
+        day TEXT PRIMARY KEY,
+        steps INTEGER NOT NULL CHECK(steps >= 0)
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS step_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        daily_goal INTEGER NOT NULL CHECK(daily_goal > 0)
+      )
+    ''');
   }
 
   Future<void> _addColumnIfMissing(

@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:the_forge/app/app_controller.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/features/templates/template_form_page.dart';
+import 'package:the_forge/features/steps/steps_page.dart';
 import 'package:the_forge/features/workouts/workout_completion_dialog.dart';
 import 'package:the_forge/features/weight/weight_page.dart';
 import 'package:the_forge/theme/app_colors.dart';
 
-enum _Page { planning, templates, history, weight }
+enum _Page { planning, templates, history, weight, steps }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -76,6 +77,7 @@ class _HomePageState extends State<HomePage> {
     _Page.templates => 'Templates',
     _Page.history => 'History',
     _Page.weight => 'Weight',
+    _Page.steps => 'Steps',
   };
 
   Widget _body() {
@@ -88,6 +90,7 @@ class _HomePageState extends State<HomePage> {
       _Page.templates => _templatesView(),
       _Page.history => _historyView(),
       _Page.weight => WeightPage(controller: widget.controller),
+      _Page.steps => StepsPage(controller: widget.controller),
     };
   }
 
@@ -105,6 +108,7 @@ class _HomePageState extends State<HomePage> {
       ),
       _Page.history => null,
       _Page.weight => null,
+      _Page.steps => null,
     };
   }
 
@@ -490,6 +494,7 @@ class _NavigationDrawer extends StatelessWidget {
             _item(Icons.copy_all_outlined, 'Templates', _Page.templates),
             _item(Icons.history, 'History', _Page.history),
             _item(Icons.monitor_weight_outlined, 'Weight', _Page.weight),
+            _item(Icons.directions_walk, 'Steps', _Page.steps),
           ],
         ),
       ),
@@ -948,7 +953,6 @@ class _SportIcon extends StatelessWidget {
     final icon = switch (sport) {
       Sport.gym => Icons.fitness_center,
       Sport.running => Icons.directions_run,
-      Sport.walking => Icons.directions_walk,
       Sport.hockey => Icons.sports_hockey,
       Sport.mobility => Icons.self_improvement,
     };

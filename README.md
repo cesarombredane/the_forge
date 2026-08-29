@@ -2,7 +2,7 @@
 
 The Forge is a personal Android training companion for building a lasting sports
 habit. It is being made for one user, not as a production service or commercial
-product. It brings gym, running, walking, hockey, and mobility training into one
+product. It brings gym, running, hockey, and mobility training into one
 place so that every session can be created, planned, completed, and reviewed.
 
 The application treats consistency as the main measure of progress. Performance
@@ -33,14 +33,17 @@ parameters specific to its sport:
 - **Gym:** a structured exercise list with sets, repetitions, and weight or
   additional weight
 - **Running:** distance, target cadence, and pace, route, or effort notes
-- **Walking:** distance, target cadence, and route or effort notes
 - **Hockey:** championship game, friendly game, training, coaching, or tournament,
   plus position or session details
-- **Mobility:** movements and body areas
+- **Mobility:** repeatable cycles of movements measured in repetitions or time
 
 Templates can be created, edited, deleted, and reused any number of times. Adding
 a template to the calendar creates an independent snapshot, so later template
 changes never rewrite an already planned or completed workout.
+
+Passive tracking is kept separate from workouts. The Weight page records
+weigh-ins and trends, while the Steps page stores editable daily step totals and
+compares their seven-day average with a configurable daily objective.
 
 ## Planning and history
 
@@ -82,7 +85,7 @@ their previous results.
 
 The current version focuses on the smallest complete training loop:
 
-- Create reusable templates for gym, running, walking, hockey, and mobility
+- Create reusable templates for gym, running, hockey, and mobility
 - Edit and permanently delete templates
 - Add a template snapshot to an exact calendar date and time
 - View planned workouts in a seven-day list or monthly calendar
@@ -90,6 +93,7 @@ The current version focuses on the smallest complete training loop:
 - Mark a workout as complete with its actual duration and a comment
 - Update exercises, sets, repetitions, and loads when completing a gym workout
 - Review completed workout history
+- Track weight evolution and editable daily steps outside the workout system
 - Store everything locally and consistently in SQLite
 
 Filters, statistics, profile preferences, and gamification are deliberately

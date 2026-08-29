@@ -196,7 +196,6 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
       Sport.running => _distanceFields(
         detailsLabel: 'Pace, route or effort notes',
       ),
-      Sport.walking => _distanceFields(detailsLabel: 'Route or effort notes'),
     };
   }
 
@@ -333,12 +332,10 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
         description: _description.text.trim(),
         warmup: _sport == Sport.mobility ? '' : _warmup.text.trim(),
         hockeyType: _sport == Sport.hockey ? _hockeyType : null,
-        distanceKm: _sport == Sport.running || _sport == Sport.walking
+        distanceKm: _sport == Sport.running
             ? double.tryParse(_distance.text)
             : null,
-        cadence: _sport == Sport.running || _sport == Sport.walking
-            ? int.tryParse(_cadence.text)
-            : null,
+        cadence: _sport == Sport.running ? int.tryParse(_cadence.text) : null,
         sportDetails: _sport == Sport.gym || _sport == Sport.mobility
             ? ''
             : _sportDetails.text.trim(),

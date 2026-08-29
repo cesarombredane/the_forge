@@ -1,4 +1,4 @@
-enum Sport { gym, running, walking, hockey, mobility }
+enum Sport { gym, running, hockey, mobility }
 
 enum HockeySessionType {
   championship,
@@ -43,6 +43,18 @@ class WeightReminder {
 
   DateTime scheduledOn(DateTime day) =>
       DateTime(day.year, day.month, day.day, hour, minute);
+}
+
+class StepEntry {
+  const StepEntry({required this.day, required this.steps});
+
+  final DateTime day;
+  final int steps;
+
+  factory StepEntry.fromMap(Map<String, Object?> map) => StepEntry(
+    day: DateTime.parse(map['day'] as String),
+    steps: map['steps'] as int,
+  );
 }
 
 class Exercise {
@@ -239,7 +251,6 @@ extension SportLabel on Sport {
   String get label => switch (this) {
     Sport.gym => 'Gym',
     Sport.running => 'Running',
-    Sport.walking => 'Walking',
     Sport.hockey => 'Hockey',
     Sport.mobility => 'Mobility',
   };

@@ -129,113 +129,148 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
 
   Future<void> _editExercise(int index) async {
     final exercise = _exercises[index];
-    final sets = TextEditingController(text: exercise.sets.toString());
-    final reps = TextEditingController(text: exercise.reps.toString());
-    final weight = TextEditingController(text: exercise.weightKg.toString());
-    var unit = exercise.unit;
-    var perSide = exercise.perSide;
     final mobility = widget.workout.sport == Sport.mobility;
-    final key = GlobalKey<FormState>();
     final result = await showDialog<Exercise>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(exercise.name),
-          content: Form(
-            key: key,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SegmentedButton<ExerciseUnit>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ExerciseUnit.reps,
-                      label: Text('Reps'),
-                    ),
-                    ButtonSegment(
-                      value: ExerciseUnit.seconds,
-                      label: Text('Time'),
-                    ),
-                  ],
-                  selected: {unit},
-                  onSelectionChanged: (selection) =>
-                      setDialogState(() => unit = selection.first),
+      builder: (_) => _WorkoutExerciseDialog(
+        exercise: exercise,
+        mobility: mobility,
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => _exercises[index] = result);
+    }
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      WorkoutCompletion(
+        durationMinutes: int.parse(_duration.text),
+        comment: _comment.text.trim(),
+        exercises: _exercises,
+      ),
+    );
+  }
+}
+
+class _WorkoutExerciseDialog extends StatefulWidget {
+  const _WorkoutExerciseDialog({
+    required this.exercise,
+    required this.mobility,
+  });
+
+  final Exercise exercise;
+  final bool mobility;
+
+  @override
+  State<_WorkoutExerciseDialog> createState() =>
+      _WorkoutExerciseDialogState();
+}
+
+class _WorkoutExerciseDialogState extends State<_WorkoutExerciseDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _sets;
+  late final TextEditingController _reps;
+  late final TextEditingController _weight;
+  late ExerciseUnit _unit;
+  late bool _perSide;
+
+  @override
+  void initState() {
+    super.initState();
+    final exercise = widget.exercise;
+    _sets = TextEditingController(text: exercise.sets.toString());
+    _reps = TextEditingController(text: exercise.reps.toString());
+    _weight = TextEditingController(text: exercise.weightKg.toString());
+    _unit = exercise.unit;
+    _perSide = exercise.perSide;
+  }
+
+  @override
+  void dispose() {
+    _sets.dispose();
+    _reps.dispose();
+    _weight.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.exercise.name),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SegmentedButton<ExerciseUnit>(
+              segments: const [
+                ButtonSegment(value: ExerciseUnit.reps, label: Text('Reps')),
+                ButtonSegment(
+                  value: ExerciseUnit.seconds,
+                  label: Text('Time'),
                 ),
-                const SizedBox(height: 12),
-                if (mobility)
-                  _positiveField(
-                    reps,
-                    unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(child: _positiveField(sets, 'Sets')),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _positiveField(
-                          reps,
-                          unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
-                        ),
-                      ),
-                    ],
-                  ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Per side'),
-                  value: perSide,
-                  onChanged: (value) => setDialogState(() => perSide = value!),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                if (!mobility) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: weight,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
+              ],
+              selected: {_unit},
+              onSelectionChanged: (selection) =>
+                  setState(() => _unit = selection.first),
+            ),
+            const SizedBox(height: 12),
+            if (widget.mobility)
+              _positiveField(
+                _reps,
+                _unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
+              )
+            else
+              Row(
+                children: [
+                  Expanded(child: _positiveField(_sets, 'Sets')),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _positiveField(
+                      _reps,
+                      _unit == ExerciseUnit.reps ? 'Reps' : 'Time (seconds)',
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'Weight / additional weight',
-                      suffixText: 'kg',
-                    ),
-                    validator: (value) => double.tryParse(value ?? '') == null
-                        ? 'Enter a number'
-                        : null,
                   ),
                 ],
-              ],
+              ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Per side'),
+              value: _perSide,
+              onChanged: (value) => setState(() => _perSide = value!),
+              controlAffinity: ListTileControlAffinity.leading,
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (!key.currentState!.validate()) return;
-                Navigator.pop(
-                  context,
-                  exercise.copyWith(
-                    sets: mobility ? 1 : int.parse(sets.text),
-                    reps: int.parse(reps.text),
-                    weightKg: mobility ? 0 : double.parse(weight.text),
-                    unit: unit,
-                    perSide: perSide,
-                  ),
-                );
-              },
-              child: const Text('Apply'),
-            ),
+            if (!widget.mobility) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _weight,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Weight / additional weight',
+                  suffixText: 'kg',
+                ),
+                validator: (value) => double.tryParse(value ?? '') == null
+                    ? 'Enter a number'
+                    : null,
+              ),
+            ],
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Apply')),
+      ],
     );
-    sets.dispose();
-    reps.dispose();
-    weight.dispose();
-    if (result != null) setState(() => _exercises[index] = result);
   }
 
   Widget _positiveField(TextEditingController controller, String label) {
@@ -254,10 +289,12 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
     if (!_formKey.currentState!.validate()) return;
     Navigator.pop(
       context,
-      WorkoutCompletion(
-        durationMinutes: int.parse(_duration.text),
-        comment: _comment.text.trim(),
-        exercises: _exercises,
+      widget.exercise.copyWith(
+        sets: widget.mobility ? 1 : int.parse(_sets.text),
+        reps: int.parse(_reps.text),
+        weightKg: widget.mobility ? 0 : double.parse(_weight.text),
+        unit: _unit,
+        perSide: _perSide,
       ),
     );
   }

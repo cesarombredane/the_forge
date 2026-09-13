@@ -21,6 +21,11 @@ component responsibilities. AI contributors must follow [AGENTS.md](../AGENTS.md
 
 ## Commands and checks
 
+The documentation website has its own npm project. See the [website README](README.md)
+for install/run commands. After website changes, run `npm run build` from `docs/`
+and check navigation, search, and diagrams in preview, in addition to the Flutter
+analysis required below.
+
 ```bash
 flutter pub get
 flutter analyze
@@ -82,6 +87,7 @@ output, or dependency caches to project documentation or source control.
 | `docs/behavior.md`    | User-visible rules, calculations, or limitations change                     |
 | `docs/development.md` | Setup details, validation, or development process changes                   |
 | `AGENTS.md`           | The user changes agent permissions or required procedure                    |
+| `docs/README.md` | Website installation, commands, routes, or maintenance changes |
 
 Document current behavior. Keep proposed features out of descriptions of the
 implemented app, and avoid duplicating detailed rules across multiple pages.

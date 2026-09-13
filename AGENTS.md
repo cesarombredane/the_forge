@@ -72,6 +72,7 @@ leave known discrepancies introduced by your work.
 - `docs/development.md`: workflow and verification commands.
 - `docs/database.md`: schema, mappings, transactions, migrations, and data effects.
 - `docs/behavior.md`: user-visible rules, calculations, and current limitations.
+- `docs/README.md`: VitePress installation, running, building, and maintenance.
 - `AGENTS.md`: user-approved changes to agent procedure.
 
 Use relative links between documentation files. Keep detailed information in its
@@ -89,5 +90,10 @@ owning page and link to it rather than duplicating it throughout the docs.
   available. Clearly distinguish analysis, build checks, and device verification.
 - Review the final diff and documentation links. Confirm changes match the
   approved scope and do not overwrite unrelated work.
+- For documentation website changes, run `npm run build` from `docs/` and verify
+  navigation, local search, and Mermaid diagrams in preview when a browser is
+  available. Keep root Markdown and guides authoritative; do not duplicate them
+  into separate website content. Exclude `docs/node_modules/` and VitePress
+  cache/build output from scans and edits.
 - Finish with a concise report of what changed, documentation updated, checks
   performed, and any remaining limitations. Do not commit the result.

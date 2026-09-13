@@ -29,6 +29,7 @@ lib/
 android/                            Android host, resources, Gradle configuration
 assets/branding/                    Source branding images
 test/                               Empty
+docs/                               Markdown guides and VitePress website tooling
 ```
 
 ## Startup and state
@@ -131,3 +132,15 @@ release builds with debug keys. Launcher icons live in Android resources.
 There is no networking client, remote persistence, sensor integration, background
 scheduler, or notification service. The main manifest does not request Internet
 permission; debug/profile manifests request it for Flutter development tooling.
+
+## Documentation website
+
+`docs/` is a separate npm project using VitePress, Vue, Mermaid, and a Mermaid
+plugin. It does not participate in the Flutter application or Android build.
+Three small Markdown wrapper pages include the root documents; other guides are
+read directly from `docs/`. Its `.vitepress/config.mjs` maps the website README
+route, translates source-relative links, and excludes dependencies from page
+discovery. Source-code links point to GitHub's `main`
+branch. The default VitePress theme is extended with dark/yellow colors, local
+search, and diagram rendering. Static output goes to `docs/.vitepress/dist/`.
+See the [website README](docs/README.md) for commands and maintenance details.

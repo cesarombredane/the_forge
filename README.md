@@ -113,6 +113,17 @@ needs to be repeated if the saved pairing is removed or no longer recognized.
 
 ## Documentation
 
+Browse the documentation locally as a VitePress website:
+
+```bash
+cd docs
+npm ci
+npm run dev
+```
+
+See the [website README](docs/README.md) for Node prerequisites, building,
+previewing, and maintaining the site.
+
 - [Architecture](ARCHITECTURE.md): current components, state flow, and persistence
 - [Development](docs/development.md): workflow, validation, and Android build notes
 - [Database](docs/database.md): tables, relationships, transactions, and migrations

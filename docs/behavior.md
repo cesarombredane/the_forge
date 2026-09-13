@@ -94,9 +94,17 @@ six months, and one year. The chart connects recorded measurements; it does not
 calculate a smoothed trend.
 
 One optional weekly reminder stores weekday and time. Planning displays it on
-matching weekdays, with an entry button on today's reminder. It produces no
-system notification and remains visible after a weigh-in; it has no completion
-state.
+matching weekdays only when no weigh-in exists for that local calendar date,
+with an entry button on today's reminder. Saving a weight from Planning or the
+Weight page hides the entire reminder for that date in both planning views.
+The calendar marker also disappears unless a pending workout still needs it.
+If the day has no other pending items, it displays “Rest day.”
+
+This is derived from stored weigh-ins, so it survives an app restart and applies
+to weights recorded before or after the reminder's scheduled time. Future weekly
+reminders remain scheduled. Deleting all weigh-ins for a date makes its reminder
+reappear. The recurring reminder setting is retained; there is no separate
+completion record or system notification.
 
 ## Steps
 

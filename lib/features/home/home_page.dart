@@ -203,7 +203,7 @@ class _HomePageState extends State<HomePage> {
           visibleMonth: _visibleMonth,
           selectedDay: _selectedDay,
           workouts: widget.controller.planned,
-          weightReminder: widget.controller.weightReminder,
+          reminderForDay: _reminderForDay,
           onMonthChanged: (month) => setState(() => _visibleMonth = month),
           onDaySelected: (day) => setState(() => _selectedDay = day),
         ),
@@ -389,7 +389,11 @@ class _HomePageState extends State<HomePage> {
 
   WeightReminder? _reminderForDay(DateTime day) {
     final reminder = widget.controller.weightReminder;
-    return reminder?.weekday == day.weekday ? reminder : null;
+    if (reminder == null || reminder.weekday != day.weekday) return null;
+    final hasWeighedIn = widget.controller.weightEntries.any(
+      (entry) => _sameDay(entry.recordedAt.toLocal(), day),
+    );
+    return hasWeighedIn ? null : reminder;
   }
 
   Future<void> _deleteTemplate(WorkoutTemplate template) async {
@@ -779,7 +783,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.visibleMonth,
     required this.selectedDay,
     required this.workouts,
-    required this.weightReminder,
+    required this.reminderForDay,
     required this.onMonthChanged,
     required this.onDaySelected,
   });
@@ -787,7 +791,7 @@ class _MonthCalendar extends StatelessWidget {
   final DateTime visibleMonth;
   final DateTime selectedDay;
   final List<Workout> workouts;
-  final WeightReminder? weightReminder;
+  final WeightReminder? Function(DateTime) reminderForDay;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDaySelected;
 
@@ -851,7 +855,7 @@ class _MonthCalendar extends StatelessWidget {
               final hasWorkout = workouts.any(
                 (workout) => _sameDay(workout.scheduledAt, day),
               );
-              final hasWeightReminder = weightReminder?.weekday == day.weekday;
+              final hasWeightReminder = reminderForDay(day) != null;
               return InkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => onDaySelected(day),

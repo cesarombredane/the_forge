@@ -61,6 +61,13 @@ Choose checks relevant to the change:
   workouts count within the current Monday-to-Sunday week.
 - Enter steps, including zero, and verify the seven-day average and goal.
 - Add/delete a weigh-in and verify history, chart, and in-app reminder display.
+- Schedule a weigh-in for today and save a weight from Planning or the Weight
+  page. Confirm the entire reminder disappears from the agenda and selected-day
+  calendar list, including its calendar marker when no pending workout exists.
+  Restart and confirm it stays hidden while next week's reminder remains.
+  With multiple weigh-ins that day, deleting one must keep the reminder hidden;
+  deleting the last must restore it. Canceling or failing to save must leave the
+  reminder visible.
 
 For schema changes, check both fresh creation and upgrade of a disposable copy
 of an older database. Preserve the user's real local history; do not uninstall

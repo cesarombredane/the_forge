@@ -12,7 +12,7 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 9,
+      version: 10,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
@@ -23,6 +23,7 @@ class AppDatabase {
         await _addStepsSchema(database);
         await _simplifyRunningSchema(database);
         await _addWeeklyRequirementsSchema(database);
+        await _addRunningTargets(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
@@ -33,6 +34,7 @@ class AppDatabase {
         if (oldVersion < 7) await _addStepsSchema(database);
         if (oldVersion < 8) await _simplifyRunningSchema(database);
         if (oldVersion < 9) await _addWeeklyRequirementsSchema(database);
+        if (oldVersion < 10) await _addRunningTargets(database);
       },
     );
   }
@@ -254,6 +256,28 @@ class AppDatabase {
         PRIMARY KEY(requirement_id, template_id)
       )
     ''');
+  }
+
+  Future<void> _addRunningTargets(Database database) async {
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'target_duration_minutes',
+      definition: 'INTEGER CHECK(target_duration_minutes > 0)',
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'target_distance_km',
+      definition: 'REAL CHECK(target_distance_km > 0)',
+    );
+    // Completed runs have already lost their original duration. Do not guess
+    // their targets from a template that may have changed since scheduling.
+    await database.execute('''UPDATE workouts
+      SET target_duration_minutes = duration_minutes,
+          target_distance_km = CASE WHEN distance_km > 0 THEN distance_km END
+      WHERE sport = 'running' AND status = 'planned'
+      ''');
   }
 
   Future<void> _addColumnIfMissing(

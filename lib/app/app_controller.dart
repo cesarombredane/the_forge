@@ -86,6 +86,10 @@ class AppController extends ChangeNotifier {
     return _run(() => _workoutRepository.reschedule(workout.id!, scheduledAt));
   }
 
+  Future<void> updateWorkout(Workout workout) {
+    return _run(() => _workoutRepository.updateCompleted(workout));
+  }
+
   Future<void> deleteWorkout(Workout workout) {
     if (workout.id == null) return Future.value();
     return _run(() => _workoutRepository.delete(workout.id!));
@@ -96,6 +100,7 @@ class AppController extends ChangeNotifier {
     required int durationMinutes,
     required String comment,
     required List<Exercise> exercises,
+    double? distanceKm,
   }) {
     return _run(
       () => _workoutRepository.complete(
@@ -103,6 +108,7 @@ class AppController extends ChangeNotifier {
         durationMinutes: durationMinutes,
         comment: comment,
         exercises: exercises,
+        distanceKm: distanceKm,
       ),
     );
   }

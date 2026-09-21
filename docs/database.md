@@ -7,7 +7,7 @@ of truth; controller collections are reloadable in-memory views.
 ## Opening and representation
 
 `AppDatabase.instance` lazily opens `the_forge.db` under `getDatabasesPath()` using
-`sqflite`. The current schema version is **9**. `onConfigure` enables foreign keys.
+`sqflite`. The current schema version is **10**. `onConfigure` enables foreign keys.
 `onCreate` builds the current schema using the schema helpers; `onUpgrade` runs
 the applicable version steps in order.
 
@@ -25,7 +25,7 @@ the applicable version steps in order.
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `templates`                    | `id`, `title`, `sport`, `duration_minutes`, `description`, `warmup`, `hockey_type`, `distance_km`, `sport_details`, `cycle_count`, legacy `cadence`                                                         |
 | `template_exercises`           | `id`, `template_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`                                                                                                                    |
-| `workouts`                     | `id`, `template_id`, `title`, `sport`, `scheduled_at`, `duration_minutes`, `notes`, `warmup`, `details`, `status`, `comment`, `completed_at`, `hockey_type`, `distance_km`, `cycle_count`, legacy `cadence` |
+| `workouts`                     | `id`, `template_id`, `title`, `sport`, `scheduled_at`, `duration_minutes`, `notes`, `warmup`, `details`, `status`, `comment`, `completed_at`, `hockey_type`, `distance_km`, `cycle_count`, `target_duration_minutes`, `target_distance_km`, legacy `cadence` |
 | `workout_exercises`            | `id`, `workout_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`                                                                                                                     |
 | `weekly_requirements`          | `id`, `name`, `target_count`                                                                                                                                                                                |
 | `weekly_requirement_templates` | Composite primary key: `requirement_id`, `template_id`                                                                                                                                                      |
@@ -81,7 +81,8 @@ ascending; weigh-ins and step days descending; requirements by name.
 | Save template           | Insert/update template and replace ordered exercises                 |
 | Delete template         | Delete template, cascade links/exercises, remove empty requirements  |
 | Schedule workout        | Insert copied template details and independent exercise rows         |
-| Complete workout        | Update status, duration, comment, completion time; replace exercises |
+| Complete workout        | Update status, actual duration/running distance, comment, completion time; replace exercises |
+| Edit completed workout  | Update snapshot fields and training date/comment; replace exercises |
 | Save weekly requirement | Insert/update requirement and replace eligible-template links        |
 
 Rescheduling, deleting workouts, and other simple writes use individual database
@@ -90,9 +91,20 @@ Saving steps replaces the entry for that day. Reminder and step-goal saves repla
 their singleton row. Weigh-ins are separate inserted records, including when
 several are recorded on the same day.
 
-Completion overwrites duration and exercise values on the workout; it does not
-retain separate planned and actual versions. No backup/export or cloud sync is
-implemented.
+Editing a completed workout updates its existing row and replaces its ordered
+exercises in one transaction. The update requires the row to still be completed;
+a missing or non-completed row fails before exercises are replaced. The ID,
+`template_id`, `status`, `completed_at`, `target_duration_minutes`, and
+`target_distance_km` are not updated. Running target columns are nullable, with
+positive-value checks. They are populated from the snapshot when scheduling a
+run, and never from the current template when editing or completing it.
+
+Completion overwrites duration and exercise values on the workout. For running,
+it also writes actual distance to `distance_km`; original targets remain in
+`target_duration_minutes` and `target_distance_km`. Other sports do not retain
+separate planned and actual versions. Pace is calculated, not stored. Completion
+requires the row to still be planned and saves all related values atomically.
+No backup/export or cloud sync is implemented.
 
 ## Migration history
 
@@ -107,6 +119,14 @@ implemented.
 | 7       | Daily steps and singleton step goal                                                   |
 | 8       | Clears running warm-up, cadence, and sport details on templates/workouts              |
 | 9       | Weekly requirements and eligible-template links                                       |
+| 10      | Nullable running target duration/distance; backfill pending runs only                  |
+
+Version 10 adds running target columns on both fresh creation and upgrade.
+Only pending running workouts are backfilled from their own duration/distance;
+a missing or nonpositive distance leaves its target distance null. Completed
+workouts keep all existing values and have null targets, since their original
+duration is no longer available. No templates, exercises, or history rows are
+deleted or rewritten by this migration beyond adding pending-run targets.
 
 Fresh creation invokes schema helpers directly; the version-6 cleanup is needed
 only during upgrades. Column-addition helpers inspect `PRAGMA table_info` before

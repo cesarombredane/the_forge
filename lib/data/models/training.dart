@@ -187,6 +187,8 @@ class Workout {
     this.comment = '',
     this.completedAt,
     this.cycleCount = 1,
+    this.targetDurationMinutes,
+    this.targetDistanceKm,
   });
 
   final int? id;
@@ -205,6 +207,8 @@ class Workout {
   final String comment;
   final DateTime? completedAt;
   final int cycleCount;
+  final int? targetDurationMinutes;
+  final double? targetDistanceKm;
 
   Map<String, Object?> toMap() => {
     'id': id,
@@ -222,6 +226,8 @@ class Workout {
     'hockey_type': hockeyType?.name,
     'distance_km': distanceKm,
     'cycle_count': cycleCount,
+    'target_duration_minutes': targetDurationMinutes,
+    'target_distance_km': targetDistanceKm,
   };
 
   factory Workout.fromMap(
@@ -249,6 +255,8 @@ class Workout {
           ? null
           : DateTime.parse(map['completed_at'] as String),
       cycleCount: map['cycle_count'] as int? ?? 1,
+      targetDurationMinutes: map['target_duration_minutes'] as int?,
+      targetDistanceKm: (map['target_distance_km'] as num?)?.toDouble(),
     );
   }
 }

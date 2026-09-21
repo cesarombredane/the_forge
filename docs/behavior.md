@@ -48,16 +48,50 @@ deletion require confirmation and are permanent.
 Completion accepts a positive actual duration and optional comment. Existing
 exercise values can be adjusted: gym sets, amount, load, unit, and per-side flag;
 mobility amount, unit, and per-side flag. The dialog does not add/remove/rename
-exercises, change running distance or hockey details, or change mobility cycles.
+exercises, change hockey details, or change mobility cycles. Runs also accept a
+positive actual distance in km, with a decimal comma or dot. Duration remains
+a positive whole number of minutes. Both inputs start from the scheduled values.
 
 Saving sets status to `completed`, records the current completion timestamp, and
-replaces the workout duration and exercise rows. Planned and actual values are
-not stored separately. Running pace displayed in History therefore uses the
-updated duration and original distance, while retaining the “target pace” label.
+replaces the workout duration and exercise rows. For running it also saves actual
+distance, while retaining separate original target duration and distance from
+the scheduled snapshot. Other sports do not store separate planned and actual
+values.
+
+Run completion, History, and History editing show Target, Actual, and Difference
+for duration, distance, and pace. Pace is duration × 60 / distance, rounded to
+seconds per kilometre. Duration and distance differences are actual minus target;
+pace differences compare the displayed rounded paces and say faster, slower, or
+on target. Distance is displayed to at most two decimal places. Blank or invalid
+inputs have no actual pace or difference until corrected; saving requires valid
+positive values.
+
+Pending runs present during the version-10 upgrade retain their scheduled values
+as targets. Previously completed runs retain their saved duration and distance,
+but show “Original targets unavailable.” Their target duration was overwritten
+on completion, and the saved distance may have been corrected in History;
+the app does not invent targets from a current template. Their saved distance
+remains editable as an actual result. A comparison cannot be recovered for those
+older runs.
 
 History displays completed workouts in descending **scheduled** date order, not
-completion-time order. The interface allows deletion, but not editing completed
-sessions or changing them back to planned.
+completion-time order. Every completed session has Edit and Delete actions in its
+menu, including sessions whose source template was deleted. Edit opens the saved snapshot with
+its name, sport, training date/time, duration, description, warm-up, comment,
+and sport-specific fields. Gym and mobility exercises can be added, renamed,
+edited, removed, and reordered using the same validation as templates.
+The running editor calculates pace from the edited duration and distance.
+
+Saving changes only that workout and its exercises; its original template link,
+completed status, completion timestamp, and original running targets are preserved. Canceling or leaving
+without saving does not write changes. Changing the training date changes the
+scheduled timestamp used for History ordering and weekly requirement matching.
+Changing sport applies the template editor's field rules, including clearing
+exercises when switching to or from gym or mobility. Weekly matching continues
+to use the original template ID, even if the workout name or sport changes.
+Running targets remain read-only even if the sport is changed and later changed
+back. A completed session changed from another sport to running has no original
+running targets. Completed sessions cannot be changed back to planned.
 
 ## Weekly requirements
 

@@ -4,6 +4,7 @@ import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/features/templates/template_form_page.dart';
 import 'package:the_forge/features/steps/steps_page.dart';
 import 'package:the_forge/features/workouts/workout_completion_dialog.dart';
+import 'package:the_forge/features/workouts/running_comparison.dart';
 import 'package:the_forge/features/weight/weight_page.dart';
 import 'package:the_forge/features/weekly_plan/weekly_plan_page.dart';
 import 'package:the_forge/theme/app_colors.dart';
@@ -290,10 +291,31 @@ class _HomePageState extends State<HomePage> {
           description: workout.description,
           warmup: workout.warmup,
           comment: workout.comment,
+          runningComparison: workout.sport == Sport.running
+              ? RunningComparison(
+                  targetMinutes: workout.targetDurationMinutes,
+                  targetDistanceKm: workout.targetDistanceKm,
+                  actualMinutes: workout.durationMinutes,
+                  actualDistanceKm: workout.distanceKm,
+                )
+              : null,
+          onEdit: () => _editWorkout(workout),
           onDelete: () => _deleteWorkout(workout),
         );
       },
     );
+  }
+
+  Future<void> _editWorkout(Workout workout) async {
+    final result = await Navigator.push<Workout>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TemplateFormPage.workout(workout: workout),
+      ),
+    );
+    if (result != null && mounted) {
+      await _perform(() => widget.controller.updateWorkout(result));
+    }
   }
 
   Future<void> _openTemplateForm([WorkoutTemplate? template]) async {
@@ -373,6 +395,7 @@ class _HomePageState extends State<HomePage> {
         durationMinutes: result.durationMinutes,
         comment: result.comment,
         exercises: result.exercises,
+        distanceKm: result.distanceKm,
       ),
     );
   }
@@ -916,6 +939,7 @@ class _TrainingCard extends StatelessWidget {
     required this.description,
     required this.warmup,
     this.comment = '',
+    this.runningComparison,
     this.primaryLabel,
     this.primaryIcon,
     this.onPrimary,
@@ -931,6 +955,7 @@ class _TrainingCard extends StatelessWidget {
   final String description;
   final String warmup;
   final String comment;
+  final Widget? runningComparison;
   final String? primaryLabel;
   final IconData? primaryIcon;
   final VoidCallback? onPrimary;
@@ -979,6 +1004,10 @@ class _TrainingCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (runningComparison != null) ...[
+              const SizedBox(height: 12),
+              runningComparison!,
+            ],
             if (details.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(details),
@@ -1213,6 +1242,9 @@ String _templateDetails(WorkoutTemplate template) {
 }
 
 String _workoutDetails(Workout workout) {
+  if (workout.sport == Sport.running &&
+      workout.status == WorkoutStatus.completed)
+    return '';
   return _details(
     sport: workout.sport,
     hockeyType: workout.hockeyType,

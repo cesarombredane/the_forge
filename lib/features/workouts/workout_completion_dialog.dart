@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:the_forge/data/models/training.dart';
+import 'package:the_forge/features/workouts/running_comparison.dart';
 
 class WorkoutCompletion {
   const WorkoutCompletion({
     required this.durationMinutes,
     required this.comment,
     required this.exercises,
+    this.distanceKm,
   });
 
   final int durationMinutes;
+  final double? distanceKm;
   final String comment;
   final List<Exercise> exercises;
 }
@@ -27,6 +30,7 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _duration;
   late final TextEditingController _comment;
+  late final TextEditingController _distance;
   late List<Exercise> _exercises;
 
   @override
@@ -36,6 +40,9 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
       text: widget.workout.durationMinutes.toString(),
     );
     _comment = TextEditingController();
+    _distance = TextEditingController(
+      text: widget.workout.distanceKm?.toString() ?? '',
+    );
     _exercises = List.of(widget.workout.exercises);
   }
 
@@ -43,6 +50,7 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
   void dispose() {
     _duration.dispose();
     _comment.dispose();
+    _distance.dispose();
     super.dispose();
   }
 
@@ -67,6 +75,7 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
               ],
               TextFormField(
                 controller: _duration,
+                onChanged: (_) => setState(() {}),
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Actual duration',
@@ -79,6 +88,39 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
                       : null;
                 },
               ),
+              if (widget.workout.sport == Sport.running) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _distance,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Actual distance',
+                    suffixText: 'km',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (value) {
+                    final distance = double.tryParse(
+                      (value ?? '').replaceAll(',', '.'),
+                    );
+                    return distance == null ||
+                            !distance.isFinite ||
+                            distance <= 0
+                        ? 'Enter a distance above 0'
+                        : null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                RunningComparison(
+                  targetMinutes: widget.workout.targetDurationMinutes,
+                  targetDistanceKm: widget.workout.targetDistanceKm,
+                  actualMinutes: int.tryParse(_duration.text),
+                  actualDistanceKm: double.tryParse(
+                    _distance.text.replaceAll(',', '.'),
+                  ),
+                ),
+              ],
               if (_exercises.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text(
@@ -132,10 +174,8 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
     final mobility = widget.workout.sport == Sport.mobility;
     final result = await showDialog<Exercise>(
       context: context,
-      builder: (_) => _WorkoutExerciseDialog(
-        exercise: exercise,
-        mobility: mobility,
-      ),
+      builder: (_) =>
+          _WorkoutExerciseDialog(exercise: exercise, mobility: mobility),
     );
     if (result != null && mounted) {
       setState(() => _exercises[index] = result);
@@ -150,6 +190,9 @@ class _WorkoutCompletionDialogState extends State<WorkoutCompletionDialog> {
         durationMinutes: int.parse(_duration.text),
         comment: _comment.text.trim(),
         exercises: _exercises,
+        distanceKm: widget.workout.sport == Sport.running
+            ? double.parse(_distance.text.replaceAll(',', '.'))
+            : null,
       ),
     );
   }
@@ -165,8 +208,7 @@ class _WorkoutExerciseDialog extends StatefulWidget {
   final bool mobility;
 
   @override
-  State<_WorkoutExerciseDialog> createState() =>
-      _WorkoutExerciseDialogState();
+  State<_WorkoutExerciseDialog> createState() => _WorkoutExerciseDialogState();
 }
 
 class _WorkoutExerciseDialogState extends State<_WorkoutExerciseDialog> {
@@ -208,10 +250,7 @@ class _WorkoutExerciseDialogState extends State<_WorkoutExerciseDialog> {
             SegmentedButton<ExerciseUnit>(
               segments: const [
                 ButtonSegment(value: ExerciseUnit.reps, label: Text('Reps')),
-                ButtonSegment(
-                  value: ExerciseUnit.seconds,
-                  label: Text('Time'),
-                ),
+                ButtonSegment(value: ExerciseUnit.seconds, label: Text('Time')),
               ],
               selected: {_unit},
               onSelectionChanged: (selection) =>

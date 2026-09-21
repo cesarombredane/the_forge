@@ -19,8 +19,8 @@ lib/
 │   └── repositories/               Template, workout, weight, steps, weekly targets
 ├── features/
 │   ├── home/home_page.dart          Navigation, agenda/calendar, templates, history
-│   ├── templates/                  Template and exercise editors
-│   ├── workouts/                   Completion and actual exercise values
+│   ├── templates/                  Template, completed workout, and exercise editor
+│   ├── workouts/                   Completion, exercise values, running comparison
 │   ├── weekly_plan/                Requirement editor and progress calculation
 │   ├── weight/                     Weigh-ins, chart, reminder configuration
 │   └── steps/                      Daily entry, goal, seven-day summary
@@ -73,8 +73,8 @@ wrapper. A write can succeed before a subsequent reload fails.
 
 `HomePage` switches between six pages using a private enum and a navigation
 drawer. A `ListenableBuilder` rebuilds the scaffold when shared state changes.
-There is no routing package. Template editing uses `Navigator.push` with a
-`MaterialPageRoute`; scheduling, completion, and smaller editors use dialogs
+There is no routing package. Template and completed-workout editing share
+`TemplateFormPage` and use `Navigator.push` with a `MaterialPageRoute`; scheduling, completion, and smaller editors use dialogs
 that return typed results.
 
 The home file also owns the calendar, agenda tiles, training cards, scheduling
@@ -94,7 +94,7 @@ does not query SQLite directly. Repositories can be supplied to the controller;
 by default each uses the shared `AppDatabase.instance`.
 
 The database opens lazily as `the_forge.db` in the platform database directory.
-It enables foreign keys and currently uses schema version 9. There are ten
+It enables foreign keys and currently uses schema version 10. There are ten
 tables covering templates, workouts, their separate exercises, weekly targets
 and template links, weights, reminders, steps, and a step goal. History is a
 status-filtered view of workouts, not a separate table.
@@ -120,7 +120,14 @@ exercises into separate rows. `templateId` retains provenance for weekly target
 matching, but does not make the workout depend on the template's continued
 existence. Rescheduling changes only its scheduled timestamp. Completion updates
 the same workout to `completed`, replaces duration and exercise values, and
-records the comment and completion timestamp in a transaction.
+records the comment and completion timestamp in a transaction. History edits
+update the stored workout and replace its exercises atomically through
+`AppController.updateWorkout` and `WorkoutRepository.updateCompleted`, preserving
+its ID, template provenance, completed status, original completion timestamp,
+and running targets. Running workouts snapshot target duration and distance at
+scheduling; completion saves actual duration and distance in the existing value
+columns. A shared `RunningComparison` widget derives pace and differences for
+completion, History, and its editor.
 
 ## Android boundary
 

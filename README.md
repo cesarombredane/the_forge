@@ -18,7 +18,9 @@ Create a template -> Schedule a workout -> Complete it -> Review history
 - **Planning:** schedule workouts at a date and time, view pending sessions in a
   seven-day agenda or monthly calendar, and reschedule or delete them.
 - **Completion and history:** record actual duration, adjust existing gym or
-  mobility exercise values, add a comment, and review completed workouts.
+  mobility exercise values, add a comment, and review or fully edit completed
+  workouts in History. Running completion records actual distance and compares
+  duration, distance, and pace with the saved targets.
 - **Weekly plan:** set Monday-to-Sunday targets accepting one template or a group
   of templates. Both scheduled and completed sessions count toward these targets.
 - **Weight:** record weigh-ins, review history and a chart, and display a recurring

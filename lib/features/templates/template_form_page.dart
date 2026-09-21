@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:the_forge/data/models/training.dart';
+import 'package:the_forge/features/workouts/running_comparison.dart';
 
 class TemplateFormPage extends StatefulWidget {
-  const TemplateFormPage({super.key, this.template});
+  const TemplateFormPage({super.key, this.template}) : workout = null;
+
+  const TemplateFormPage.workout({super.key, required Workout this.workout})
+    : template = null;
 
   final WorkoutTemplate? template;
+  final Workout? workout;
 
   @override
   State<TemplateFormPage> createState() => _TemplateFormPageState();
@@ -22,11 +27,31 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   late Sport _sport;
   HockeySessionType _hockeyType = HockeySessionType.training;
   late List<Exercise> _exercises;
+  late final TextEditingController _comment;
+  DateTime? _scheduledAt;
 
   @override
   void initState() {
     super.initState();
-    final template = widget.template;
+    final workout = widget.workout;
+    final template =
+        widget.template ??
+        (workout == null
+            ? null
+            : WorkoutTemplate(
+                title: workout.title,
+                sport: workout.sport,
+                durationMinutes: workout.durationMinutes,
+                description: workout.description,
+                warmup: workout.warmup,
+                hockeyType: workout.hockeyType,
+                distanceKm: workout.distanceKm,
+                sportDetails: workout.sportDetails,
+                exercises: workout.exercises,
+                cycleCount: workout.cycleCount,
+              ));
+    _comment = TextEditingController(text: workout?.comment ?? '');
+    _scheduledAt = workout?.scheduledAt;
     _title = TextEditingController(text: template?.title ?? '');
     _duration = TextEditingController(
       text: template?.durationMinutes.toString() ?? '60',
@@ -54,6 +79,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     _distance.dispose();
     _sportDetails.dispose();
     _cycles.dispose();
+    _comment.dispose();
     super.dispose();
   }
 
@@ -61,7 +87,13 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.template == null ? 'New template' : 'Edit template'),
+        title: Text(
+          widget.workout != null
+              ? 'Edit workout'
+              : widget.template == null
+              ? 'New template'
+              : 'Edit template',
+        ),
       ),
       body: SafeArea(
         child: Form(
@@ -69,6 +101,18 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (_scheduledAt != null) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Training date and time'),
+                  subtitle: Text(
+                    '${MaterialLocalizations.of(context).formatMediumDate(_scheduledAt!)} · ${TimeOfDay.fromDateTime(_scheduledAt!).format(context)}',
+                  ),
+                  trailing: const Icon(Icons.edit_calendar_outlined),
+                  onTap: _pickTrainingDate,
+                ),
+                const SizedBox(height: 16),
+              ],
               DropdownButtonFormField<Sport>(
                 initialValue: _sport,
                 decoration: const InputDecoration(labelText: 'Sport'),
@@ -95,10 +139,12 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _title,
-                autofocus: widget.template == null,
+                autofocus: widget.template == null && widget.workout == null,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Template name',
+                decoration: InputDecoration(
+                  labelText: widget.workout == null
+                      ? 'Template name'
+                      : 'Workout name',
                   hintText: 'Leg day, Sunday run…',
                 ),
                 validator: _required,
@@ -110,8 +156,10 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
                 onChanged: (_) {
                   if (_sport == Sport.running) setState(() {});
                 },
-                decoration: const InputDecoration(
-                  labelText: 'Duration',
+                decoration: InputDecoration(
+                  labelText: widget.workout != null && _sport == Sport.running
+                      ? 'Actual duration'
+                      : 'Duration',
                   suffixText: 'minutes',
                 ),
                 validator: (value) {
@@ -147,11 +195,26 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
               ],
               const SizedBox(height: 24),
               ..._sportFields(),
+              if (widget.workout != null) ...[
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _comment,
+                  minLines: 2,
+                  maxLines: 5,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Training comment',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
               FilledButton.icon(
                 onPressed: _submit,
                 icon: const Icon(Icons.save_outlined),
-                label: const Text('Save template'),
+                label: Text(
+                  widget.workout == null ? 'Save template' : 'Save workout',
+                ),
               ),
             ],
           ),
@@ -256,23 +319,31 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
       controller: _distance,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (_) => setState(() {}),
-      decoration: const InputDecoration(
-        labelText: 'Distance',
+      decoration: InputDecoration(
+        labelText: widget.workout == null ? 'Distance' : 'Actual distance',
         suffixText: 'km',
       ),
       validator: _positiveDouble,
     ),
     const SizedBox(height: 16),
-    InputDecorator(
-      decoration: const InputDecoration(
-        labelText: 'Target pace',
-        suffixText: 'min/km',
+    if (widget.workout != null)
+      RunningComparison(
+        targetMinutes: widget.workout!.targetDurationMinutes,
+        targetDistanceKm: widget.workout!.targetDistanceKm,
+        actualMinutes: int.tryParse(_duration.text),
+        actualDistanceKm: double.tryParse(_distance.text.replaceAll(',', '.')),
+      )
+    else
+      InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Target pace',
+          suffixText: 'min/km',
+        ),
+        child: Text(
+          _runningPace() ?? 'Enter a valid duration and distance',
+          style: TextStyle(color: _runningPace() == null ? Colors.grey : null),
+        ),
       ),
-      child: Text(
-        _runningPace() ?? 'Enter a valid duration and distance',
-        style: TextStyle(color: _runningPace() == null ? Colors.grey : null),
-      ),
-    ),
   ];
 
   Future<void> _editExercise({int? index, required bool mobility}) async {
@@ -303,6 +374,31 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     });
   }
 
+  Future<void> _pickTrainingDate() async {
+    final initial = _scheduledAt!;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(initial.year < 2020 ? initial.year : 2020),
+      lastDate: DateTime(initial.year > 2100 ? initial.year : 2100, 12, 31),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) return;
+    setState(
+      () => _scheduledAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      ),
+    );
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     if ((_sport == Sport.gym || _sport == Sport.mobility) &&
@@ -312,36 +408,63 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
       );
       return;
     }
-    Navigator.pop(
-      context,
-      WorkoutTemplate(
-        id: widget.template?.id,
-        title: _title.text.trim(),
-        sport: _sport,
-        durationMinutes: int.parse(_duration.text),
-        description: _description.text.trim(),
-        warmup: _sport == Sport.mobility || _sport == Sport.running
-            ? ''
-            : _warmup.text.trim(),
-        hockeyType: _sport == Sport.hockey ? _hockeyType : null,
-        distanceKm: _sport == Sport.running
-            ? double.tryParse(_distance.text)
-            : null,
-        sportDetails: _sport == Sport.hockey ? _sportDetails.text.trim() : '',
-        exercises: _sport == Sport.gym || _sport == Sport.mobility
-            ? _exercises
-            : const [],
-        cycleCount: _sport == Sport.mobility ? int.parse(_cycles.text) : 1,
-      ),
+    final values = WorkoutTemplate(
+      id: widget.template?.id,
+      title: _title.text.trim(),
+      sport: _sport,
+      durationMinutes: int.parse(_duration.text),
+      description: _description.text.trim(),
+      warmup: _sport == Sport.mobility || _sport == Sport.running
+          ? ''
+          : _warmup.text.trim(),
+      hockeyType: _sport == Sport.hockey ? _hockeyType : null,
+      distanceKm: _sport == Sport.running
+          ? double.tryParse(_distance.text.replaceAll(',', '.'))
+          : null,
+      sportDetails: _sport == Sport.hockey ? _sportDetails.text.trim() : '',
+      exercises: _sport == Sport.gym || _sport == Sport.mobility
+          ? _exercises
+          : const [],
+      cycleCount: _sport == Sport.mobility ? int.parse(_cycles.text) : 1,
     );
+    final workout = widget.workout;
+    if (workout == null) {
+      Navigator.pop(context, values);
+    } else {
+      Navigator.pop(
+        context,
+        Workout(
+          id: workout.id,
+          templateId: workout.templateId,
+          title: values.title,
+          sport: values.sport,
+          scheduledAt: _scheduledAt!,
+          durationMinutes: values.durationMinutes,
+          description: values.description,
+          warmup: values.warmup,
+          status: workout.status,
+          hockeyType: values.hockeyType,
+          distanceKm: values.distanceKm,
+          sportDetails: values.sportDetails,
+          exercises: values.exercises,
+          cycleCount: values.cycleCount,
+          comment: _comment.text.trim(),
+          completedAt: workout.completedAt,
+          targetDurationMinutes: workout.targetDurationMinutes,
+          targetDistanceKm: workout.targetDistanceKm,
+        ),
+      );
+    }
   }
 
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'This field is required' : null;
 
   String? _positiveDouble(String? value) {
-    final number = double.tryParse(value ?? '');
-    return number == null || number <= 0 ? 'Enter a number above 0' : null;
+    final number = double.tryParse((value ?? '').replaceAll(',', '.'));
+    return number == null || !number.isFinite || number <= 0
+        ? 'Enter a number above 0'
+        : null;
   }
 
   String? _positiveInt(String? value) {
@@ -350,18 +473,11 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   }
 
   String? _runningPace() {
-    final duration = int.tryParse(_duration.text);
-    final distance = double.tryParse(_distance.text);
-    if (duration == null ||
-        duration <= 0 ||
-        distance == null ||
-        distance <= 0) {
-      return null;
-    }
-    final secondsPerKm = (duration * 60 / distance).round();
-    final minutes = secondsPerKm ~/ 60;
-    final seconds = secondsPerKm % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+    final pace = runningPaceSeconds(
+      int.tryParse(_duration.text),
+      double.tryParse(_distance.text.replaceAll(',', '.')),
+    );
+    return pace == null ? null : formatRunningPace(pace);
   }
 }
 
@@ -476,7 +592,9 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
                     suffixText: 'kg',
                   ),
                   validator: (value) {
-                    final number = double.tryParse(value ?? '');
+                    final number = double.tryParse(
+                      (value ?? '').replaceAll(',', '.'),
+                    );
                     return number == null ? 'Enter a number' : null;
                   },
                 ),

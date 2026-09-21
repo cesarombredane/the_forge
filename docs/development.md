@@ -57,6 +57,18 @@ Choose checks relevant to the change:
 - Create each affected sport template and verify validation and exercise order.
 - Schedule a template, edit the original, and confirm the workout snapshot stays
   unchanged. Complete it and verify its values in History after restarting.
+- Edit completed workouts for all four sports in History. Check date/time,
+  duration, comment, and sport-specific fields; add, rename, remove, and reorder
+  exercises. Verify invalid values are rejected and cancel leaves data unchanged.
+  Restart and confirm edits persist while source templates and other workouts
+  remain unchanged. Check a workout whose template was deleted, and verify
+  changing its training date updates History order and weekly matching.
+- Complete a run with a different duration and distance (including decimal
+  comma input). Check target/actual/difference values, faster/slower/equal pace,
+  invalid and blank input, and cancel. Restart and edit actual results in History;
+  targets must stay fixed even if the source template changes or is deleted.
+  Check version-10 fresh creation and upgrades using disposable data: pending
+  runs gain their own targets; old completed runs keep values with unknown targets.
 - Create a weekly requirement and verify that both planned and completed matching
   workouts count within the current Monday-to-Sunday week.
 - Enter steps, including zero, and verify the seven-day average and goal.

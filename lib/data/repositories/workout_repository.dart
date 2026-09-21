@@ -40,10 +40,41 @@ class WorkoutRepository {
         sportDetails: template.sportDetails,
         exercises: template.exercises,
         cycleCount: template.cycleCount,
+        targetDurationMinutes: template.sport == Sport.running
+            ? template.durationMinutes
+            : null,
+        targetDistanceKm: template.sport == Sport.running
+            ? template.distanceKm
+            : null,
       );
       final values = workout.toMap()..remove('id');
       final workoutId = await transaction.insert('workouts', values);
       await _replaceExercises(transaction, workoutId, workout.exercises);
+    });
+  }
+
+  Future<void> updateCompleted(Workout workout) async {
+    if (workout.id == null || workout.status != WorkoutStatus.completed) {
+      throw ArgumentError('An existing completed workout is required.');
+    }
+    final database = await _appDatabase.database;
+    await database.transaction((transaction) async {
+      final values = workout.toMap()
+        ..remove('id')
+        ..remove('template_id')
+        ..remove('status')
+        ..remove('completed_at')
+        ..remove('target_duration_minutes')
+        ..remove('target_distance_km');
+      final count = await transaction.update(
+        'workouts',
+        values,
+        where: 'id = ? AND status = ?',
+        whereArgs: [workout.id, WorkoutStatus.completed.name],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+      if (count != 1) throw StateError('Completed workout no longer exists.');
+      await _replaceExercises(transaction, workout.id!, workout.exercises);
     });
   }
 
@@ -67,21 +98,28 @@ class WorkoutRepository {
     required int durationMinutes,
     required String comment,
     required List<Exercise> exercises,
+    double? distanceKm,
   }) async {
+    if (workout.sport == Sport.running &&
+        (distanceKm == null || !distanceKm.isFinite || distanceKm <= 0)) {
+      throw ArgumentError('A positive actual running distance is required.');
+    }
     final database = await _appDatabase.database;
     await database.transaction((transaction) async {
-      await transaction.update(
+      final count = await transaction.update(
         'workouts',
         {
           'status': WorkoutStatus.completed.name,
           'duration_minutes': durationMinutes,
+          if (workout.sport == Sport.running) 'distance_km': distanceKm,
           'comment': comment,
           'completed_at': DateTime.now().toIso8601String(),
         },
-        where: 'id = ?',
-        whereArgs: [workout.id],
+        where: 'id = ? AND status = ?',
+        whereArgs: [workout.id, WorkoutStatus.planned.name],
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+      if (count != 1) throw StateError('Planned workout no longer exists.');
       await _replaceExercises(transaction, workout.id!, exercises);
     });
   }

@@ -57,6 +57,8 @@ class WorkoutRepository {
     if (workout.id == null || workout.status != WorkoutStatus.completed) {
       throw ArgumentError('An existing completed workout is required.');
     }
+    if (workout.sport == Sport.gym)
+      validateGymWorkout(workout, finishing: true);
     final database = await _appDatabase.database;
     await database.transaction((transaction) async {
       final values = workout.toMap()
@@ -65,7 +67,8 @@ class WorkoutRepository {
         ..remove('status')
         ..remove('completed_at')
         ..remove('target_duration_minutes')
-        ..remove('target_distance_km');
+        ..remove('target_distance_km')
+        ..remove('started_at');
       final count = await transaction.update(
         'workouts',
         values,
@@ -75,6 +78,100 @@ class WorkoutRepository {
       );
       if (count != 1) throw StateError('Completed workout no longer exists.');
       await _replaceExercises(transaction, workout.id!, workout.exercises);
+    });
+  }
+
+  Future<void> startGym(int workoutId) async {
+    final db = await _appDatabase.database;
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'workouts',
+        where: 'id = ? AND sport = ? AND status = ?',
+        whereArgs: [workoutId, 'gym', 'planned'],
+      );
+      if (rows.isEmpty)
+        throw StateError('This gym workout is no longer planned.');
+      if (rows.single['started_at'] != null) return;
+      final exercises = await _getExercises(tx, workoutId);
+      for (final exercise in exercises) {
+        final library = await tx.query(
+          'exercise_library',
+          where: 'id = ?',
+          whereArgs: [exercise.libraryId],
+        );
+        if (library.isEmpty ||
+            library.single['needs_review'] == 1 ||
+            exercise.weightMode == null) {
+          throw StateError(
+            'Review ${exercise.name} in Exercises before starting.',
+          );
+        }
+      }
+      final weights = await tx.query(
+        'weight_entries',
+        where: 'recorded_at <= ?',
+        whereArgs: [DateTime.now().toIso8601String()],
+        orderBy: 'recorded_at DESC',
+        limit: 1,
+      );
+      final bodyweight = weights.isEmpty
+          ? null
+          : (weights.single['weight_kg'] as num).toDouble();
+      if (bodyweight == null &&
+          exercises.any((e) => e.weightMode == WeightMode.bodyweight)) {
+        throw StateError('Record a bodyweight in Weight before starting.');
+      }
+      await tx.update(
+        'workouts',
+        {
+          'started_at': DateTime.now().toIso8601String(),
+          'body_weight_kg': bodyweight,
+        },
+        where: 'id = ?',
+        whereArgs: [workoutId],
+      );
+    });
+  }
+
+  Future<void> saveGym(Workout workout, {bool finish = false}) async {
+    validateGymWorkout(workout, finishing: finish);
+    final db = await _appDatabase.database;
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'workouts',
+        where: 'id = ? AND sport = ? AND status = ? AND started_at IS NOT NULL',
+        whereArgs: [workout.id, 'gym', 'planned'],
+      );
+      if (rows.isEmpty)
+        throw StateError('This session is no longer in progress.');
+      if ((rows.single['body_weight_kg'] as num?)?.toDouble() !=
+          workout.bodyWeightKg) {
+        throw StateError('The session bodyweight snapshot is fixed.');
+      }
+      final original = await _getExercises(tx, workout.id!);
+      if (original.length != workout.exercises.length)
+        throw StateError('Session exercises are fixed.');
+      for (var i = 0; i < original.length; i++) {
+        if (original[i].libraryId != workout.exercises[i].libraryId ||
+            original[i].unit != workout.exercises[i].unit ||
+            original[i].weightMode != workout.exercises[i].weightMode ||
+            original[i].prescribedSets.length !=
+                workout.exercises[i].prescribedSets.length) {
+          throw StateError('Session exercises and set counts are fixed.');
+        }
+      }
+      await tx.update(
+        'workouts',
+        {
+          'duration_minutes': workout.durationMinutes,
+          'comment': workout.comment,
+          if (finish) 'status': 'completed',
+          if (finish) 'completed_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [workout.id],
+      );
+      await _replaceExercises(tx, workout.id!, workout.exercises);
     });
   }
 
@@ -100,6 +197,8 @@ class WorkoutRepository {
     required List<Exercise> exercises,
     double? distanceKm,
   }) async {
+    if (workout.sport == Sport.gym)
+      throw StateError('Use Start workout for gym sessions.');
     if (workout.sport == Sport.running &&
         (distanceKm == null || !distanceKm.isFinite || distanceKm <= 0)) {
       throw ArgumentError('A positive actual running distance is required.');
@@ -124,25 +223,41 @@ class WorkoutRepository {
     });
   }
 
-  Future<List<Exercise>> _getExercises(Database database, int workoutId) async {
+  Future<List<Exercise>> _getExercises(
+    DatabaseExecutor database,
+    int workoutId,
+  ) async {
     final rows = await database.query(
       'workout_exercises',
       where: 'workout_id = ?',
       whereArgs: [workoutId],
       orderBy: 'position',
     );
-    return rows
-        .map(
-          (row) => Exercise(
-            name: row['name'] as String,
-            sets: row['sets'] as int,
-            reps: row['reps'] as int,
-            weightKg: (row['weight_kg'] as num).toDouble(),
-            unit: ExerciseUnit.values.byName(row['unit'] as String),
-            perSide: (row['per_side'] as int) == 1,
-          ),
-        )
-        .toList();
+    final result = <Exercise>[];
+    for (final row in rows) {
+      final sets = await database.query(
+        'gym_sets',
+        where: 'exercise_id = ?',
+        whereArgs: [row['id']],
+        orderBy: 'position',
+      );
+      result.add(
+        Exercise(
+          name: row['name'] as String,
+          sets: row['sets'] as int,
+          reps: row['reps'] as int,
+          weightKg: (row['weight_kg'] as num).toDouble(),
+          unit: ExerciseUnit.values.byName(row['unit'] as String),
+          perSide: row['per_side'] == 1,
+          libraryId: row['library_id'] as int?,
+          weightMode: row['weight_mode'] == null
+              ? null
+              : WeightMode.values.byName(row['weight_mode'] as String),
+          workingSets: sets.map(WorkingSet.fromMap).toList(),
+        ),
+      );
+    }
+    return result;
   }
 
   Future<void> _replaceExercises(
@@ -157,8 +272,10 @@ class WorkoutRepository {
     );
     for (var index = 0; index < exercises.length; index++) {
       final exercise = exercises[index];
-      await transaction.insert('workout_exercises', {
+      final exerciseId = await transaction.insert('workout_exercises', {
         'workout_id': workoutId,
+        'library_id': exercise.libraryId,
+        'weight_mode': exercise.weightMode?.name,
         'position': index,
         'name': exercise.name,
         'sets': exercise.sets,
@@ -167,6 +284,16 @@ class WorkoutRepository {
         'unit': exercise.unit.name,
         'per_side': exercise.perSide ? 1 : 0,
       });
+      if (exercise.libraryId != null) {
+        final sets = exercise.prescribedSets;
+        for (var position = 0; position < sets.length; position++) {
+          await transaction.insert('gym_sets', {
+            'exercise_id': exerciseId,
+            'position': position,
+            ...sets[position].toMap(),
+          });
+        }
+      }
     }
   }
 }

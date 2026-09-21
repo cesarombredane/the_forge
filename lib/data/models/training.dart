@@ -12,6 +12,66 @@ enum WorkoutStatus { planned, completed }
 
 enum ExerciseUnit { reps, seconds }
 
+enum WeightMode { external, bodyweight }
+
+String exerciseKey(String name) =>
+    name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+class LibraryExercise {
+  const LibraryExercise({
+    required this.id,
+    required this.name,
+    required this.unit,
+    required this.weightMode,
+    this.archived = false,
+    this.tracked = false,
+    this.needsReview = false,
+  });
+  final int id;
+  final String name;
+  final ExerciseUnit unit;
+  final WeightMode weightMode;
+  final bool archived;
+  final bool tracked;
+  final bool needsReview;
+  factory LibraryExercise.fromMap(Map<String, Object?> row) => LibraryExercise(
+    id: row['id'] as int,
+    name: row['name'] as String,
+    unit: ExerciseUnit.values.byName(row['unit'] as String),
+    weightMode: WeightMode.values.byName(row['weight_mode'] as String),
+    archived: row['archived'] == 1,
+    tracked: row['tracked'] == 1,
+    needsReview: row['needs_review'] == 1,
+  );
+}
+
+class WorkingSet {
+  const WorkingSet({
+    required this.amount,
+    required this.weightKg,
+    this.confirmed = false,
+  });
+  final int amount;
+  final double weightKg;
+  final bool confirmed;
+  WorkingSet copyWith({int? amount, double? weightKg, bool? confirmed}) =>
+      WorkingSet(
+        amount: amount ?? this.amount,
+        weightKg: weightKg ?? this.weightKg,
+        confirmed: confirmed ?? this.confirmed,
+      );
+  Map<String, Object?> toMap() => {
+    'amount': amount,
+    'weight_kg': weightKg,
+    'confirmed': confirmed ? 1 : 0,
+  };
+  factory WorkingSet.fromMap(Map<String, Object?> row) => WorkingSet(
+    amount: row['amount'] as int,
+    weightKg: (row['weight_kg'] as num).toDouble(),
+    confirmed: row['confirmed'] == 1,
+  );
+}
+
 class WeightEntry {
   const WeightEntry({
     this.id,
@@ -79,6 +139,9 @@ class Exercise {
     required this.weightKg,
     this.unit = ExerciseUnit.reps,
     this.perSide = false,
+    this.libraryId,
+    this.weightMode,
+    this.workingSets = const [],
   });
 
   final String name;
@@ -87,6 +150,15 @@ class Exercise {
   final double weightKg;
   final ExerciseUnit unit;
   final bool perSide;
+  final int? libraryId;
+  final WeightMode? weightMode;
+  final List<WorkingSet> workingSets;
+  List<WorkingSet> get prescribedSets => workingSets.isNotEmpty
+      ? workingSets
+      : List.generate(
+          sets,
+          (_) => WorkingSet(amount: reps, weightKg: weightKg),
+        );
 
   Exercise copyWith({
     String? name,
@@ -95,6 +167,9 @@ class Exercise {
     double? weightKg,
     ExerciseUnit? unit,
     bool? perSide,
+    int? libraryId,
+    WeightMode? weightMode,
+    List<WorkingSet>? workingSets,
   }) {
     return Exercise(
       name: name ?? this.name,
@@ -103,6 +178,9 @@ class Exercise {
       weightKg: weightKg ?? this.weightKg,
       unit: unit ?? this.unit,
       perSide: perSide ?? this.perSide,
+      libraryId: libraryId ?? this.libraryId,
+      weightMode: weightMode ?? this.weightMode,
+      workingSets: workingSets ?? this.workingSets,
     );
   }
 }
@@ -189,6 +267,8 @@ class Workout {
     this.cycleCount = 1,
     this.targetDurationMinutes,
     this.targetDistanceKm,
+    this.startedAt,
+    this.bodyWeightKg,
   });
 
   final int? id;
@@ -209,6 +289,39 @@ class Workout {
   final int cycleCount;
   final int? targetDurationMinutes;
   final double? targetDistanceKm;
+  final DateTime? startedAt;
+  final double? bodyWeightKg;
+
+  Workout copyWith({
+    String? title,
+    DateTime? scheduledAt,
+    int? durationMinutes,
+    String? comment,
+    List<Exercise>? exercises,
+    DateTime? startedAt,
+    double? bodyWeightKg,
+  }) => Workout(
+    id: id,
+    templateId: templateId,
+    title: title ?? this.title,
+    sport: sport,
+    scheduledAt: scheduledAt ?? this.scheduledAt,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
+    description: description,
+    warmup: warmup,
+    status: status,
+    hockeyType: hockeyType,
+    distanceKm: distanceKm,
+    sportDetails: sportDetails,
+    exercises: exercises ?? this.exercises,
+    comment: comment ?? this.comment,
+    completedAt: completedAt,
+    cycleCount: cycleCount,
+    targetDurationMinutes: targetDurationMinutes,
+    targetDistanceKm: targetDistanceKm,
+    startedAt: startedAt ?? this.startedAt,
+    bodyWeightKg: bodyWeightKg ?? this.bodyWeightKg,
+  );
 
   Map<String, Object?> toMap() => {
     'id': id,
@@ -228,6 +341,8 @@ class Workout {
     'cycle_count': cycleCount,
     'target_duration_minutes': targetDurationMinutes,
     'target_distance_km': targetDistanceKm,
+    'started_at': startedAt?.toIso8601String(),
+    'body_weight_kg': bodyWeightKg,
   };
 
   factory Workout.fromMap(
@@ -257,6 +372,10 @@ class Workout {
       cycleCount: map['cycle_count'] as int? ?? 1,
       targetDurationMinutes: map['target_duration_minutes'] as int?,
       targetDistanceKm: (map['target_distance_km'] as num?)?.toDouble(),
+      startedAt: map['started_at'] == null
+          ? null
+          : DateTime.parse(map['started_at'] as String),
+      bodyWeightKg: (map['body_weight_kg'] as num?)?.toDouble(),
     );
   }
 }
@@ -278,4 +397,30 @@ extension HockeySessionTypeLabel on HockeySessionType {
     HockeySessionType.coaching => 'Coaching',
     HockeySessionType.tournament => 'Tournament',
   };
+}
+
+void validateGymWorkout(Workout workout, {required bool finishing}) {
+  if (workout.durationMinutes <= 0)
+    throw ArgumentError('Enter a positive duration.');
+  for (final exercise in workout.exercises) {
+    if (exercise.libraryId == null || exercise.weightMode == null)
+      throw StateError('Review exercise links and weight modes first.');
+    for (final set in exercise.prescribedSets) {
+      if (set.amount < 0 || !set.weightKg.isFinite)
+        throw ArgumentError('Enter valid set values.');
+      if (finishing && !set.confirmed)
+        throw StateError('Confirm every working set, including skipped sets.');
+      if (exercise.weightMode == WeightMode.external && set.weightKg < 0)
+        throw ArgumentError(
+          'External load cannot be negative. Use bodyweight mode for assistance.',
+        );
+      if (exercise.weightMode == WeightMode.bodyweight) {
+        final bodyweight = workout.bodyWeightKg;
+        if (bodyweight == null || !bodyweight.isFinite || bodyweight <= 0)
+          throw StateError('A bodyweight snapshot is required.');
+        if (bodyweight + set.weightKg < 0)
+          throw ArgumentError('Assistance cannot exceed bodyweight.');
+      }
+    }
+  }
 }

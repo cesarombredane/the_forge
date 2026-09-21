@@ -75,6 +75,10 @@ class TemplateRepository {
         .map(
           (row) => Exercise(
             name: row['name'] as String,
+            libraryId: row['library_id'] as int?,
+            weightMode: row['weight_mode'] == null
+                ? null
+                : WeightMode.values.byName(row['weight_mode'] as String),
             sets: row['sets'] as int,
             reps: row['reps'] as int,
             weightKg: (row['weight_kg'] as num).toDouble(),
@@ -94,6 +98,8 @@ class TemplateRepository {
       final exercise = exercises[index];
       await transaction.insert('template_exercises', {
         'template_id': templateId,
+        'library_id': exercise.libraryId,
+        'weight_mode': exercise.weightMode?.name,
         'position': index,
         'name': exercise.name,
         'sets': exercise.sets,

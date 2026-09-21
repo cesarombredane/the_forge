@@ -15,12 +15,14 @@ lib/
 │   └── app_controller.dart          Shared state and operation coordination
 ├── data/
 │   ├── local/app_database.dart      SQLite opening, creation, migrations
-│   ├── models/training.dart         Domain objects, enums, map conversion
-│   └── repositories/               Template, workout, weight, steps, weekly targets
+│   ├── models/                     Domain objects, map conversion, performance calculations
+│   └── repositories/               Template, workout, exercise library, weight, steps, weekly targets
 ├── features/
 │   ├── home/home_page.dart          Navigation, agenda/calendar, templates, history
 │   ├── templates/                  Template, completed workout, and exercise editor
-│   ├── workouts/                   Completion, exercise values, running comparison
+│   ├── workouts/                   Completion, resumable gym sessions, set entry
+│   ├── exercises/                  Exercise library, review and link correction
+│   ├── performance/                Gym and running charts
 │   ├── weekly_plan/                Requirement editor and progress calculation
 │   ├── weight/                     Weigh-ins, chart, reminder configuration
 │   └── steps/                      Daily entry, goal, seven-day summary
@@ -39,8 +41,8 @@ docs/                               Markdown guides and VitePress website toolin
 when the root is disposed. `MaterialApp` forces the dark theme.
 
 `AppController` extends Flutter's `ChangeNotifier`. It loads templates, workouts,
-weigh-ins, the weight reminder, daily steps, the step goal, and weekly requirements
-using `Future.wait`. It exposes unmodifiable collections or derived lists.
+weigh-ins, the weight reminder, daily steps, the step goal, weekly requirements,
+and the exercise library using `Future.wait`. It exposes unmodifiable collections or derived lists.
 `planned` filters workouts by status; `completed` filters and reverses the
 repository's schedule-ordered list.
 
@@ -51,7 +53,7 @@ flowchart TD
     Root --> Home[HomePage / ListenableBuilder]
     Home --> Screens[Feature screens and dialogs]
     Screens -->|User operations| Controller
-    Controller --> Repositories[Five repositories]
+    Controller --> Repositories[Six repositories]
     Repositories --> DB[AppDatabase / SQLite]
     DB -->|Query results| Repositories
     Repositories -->|Domain objects| Controller
@@ -71,7 +73,7 @@ wrapper. A write can succeed before a subsequent reload fails.
 
 ## Presentation and navigation
 
-`HomePage` switches between six pages using a private enum and a navigation
+`HomePage` switches between eight pages using a private enum and a navigation
 drawer. A `ListenableBuilder` rebuilds the scaffold when shared state changes.
 There is no routing package. Template and completed-workout editing share
 `TemplateFormPage` and use `Navigator.push` with a `MaterialPageRoute`; scheduling, completion, and smaller editors use dialogs
@@ -85,8 +87,8 @@ These are local implementations, not external chart/calendar packages.
 
 ## Domain and persistence
 
-All domain types live in `training.dart`: `WorkoutTemplate`, `Workout`,
-`Exercise`, `WeeklyRequirement`, `WeightEntry`, `WeightReminder`, and `StepEntry`,
+Stored domain types live in `training.dart`: `WorkoutTemplate`, `Workout`,
+`Exercise`, `LibraryExercise`, `WorkingSet`, `WeeklyRequirement`, `WeightEntry`, `WeightReminder`, and `StepEntry`,
 plus sport, hockey type, workout status, and exercise unit enums.
 
 Repositories translate these objects to and from SQLite rows. Presentation code
@@ -94,9 +96,10 @@ does not query SQLite directly. Repositories can be supplied to the controller;
 by default each uses the shared `AppDatabase.instance`.
 
 The database opens lazily as `the_forge.db` in the platform database directory.
-It enables foreign keys and currently uses schema version 10. There are ten
+It enables foreign keys and currently uses schema version 11. There are twelve
 tables covering templates, workouts, their separate exercises, weekly targets
-and template links, weights, reminders, steps, and a step goal. History is a
+and template links, weights, reminders, steps, a step goal, the exercise library,
+and individual gym sets. History is a
 status-filtered view of workouts, not a separate table.
 
 ```mermaid
@@ -128,6 +131,28 @@ and running targets. Running workouts snapshot target duration and distance at
 scheduling; completion saves actual duration and distance in the existing value
 columns. A shared `RunningComparison` widget derives pace and differences for
 completion, History, and its editor.
+
+## Exercise identity and gym sessions
+
+`exercise_library` supplies stable IDs shared by template and workout exercises.
+Each occurrence keeps its own name, unit, weight mode, and prescription snapshot.
+Renaming or archiving a library entry does not rewrite those snapshots. The
+exercise repository owns library writes and explicit link corrections; the
+workout repository owns session start, set writes, and completion transactions.
+
+A gym workout stays `planned` while `started_at` identifies a resumable session.
+Starting captures the latest available bodyweight. `gym_sets` stores ordered
+working-set values and confirmation flags beneath the workout's exercise rows.
+The session page queues writes in order, shows saving/failure state, and waits
+for outstanding writes before leaving or finishing. Invalid fields block exit;
+valid edits and the comment are saved without requiring workout completion.
+
+`performance.dart` contains pure calculations over completed workout snapshots.
+The Performance feature renders local `CustomPainter` charts and persists the
+chosen gym exercise IDs through the exercise repository. Charts use training
+dates, not completion timestamps. History edits flow through the normal reload
+and therefore update calculations. See [behavior](docs/behavior.md) for formulas,
+unknown-value handling, and previous-performance selection.
 
 ## Android boundary
 

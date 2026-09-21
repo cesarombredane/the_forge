@@ -7,7 +7,7 @@ of truth; controller collections are reloadable in-memory views.
 ## Opening and representation
 
 `AppDatabase.instance` lazily opens `the_forge.db` under `getDatabasesPath()` using
-`sqflite`. The current schema version is **10**. `onConfigure` enables foreign keys.
+`sqflite`. The current schema version is **11**. `onConfigure` enables foreign keys.
 `onCreate` builds the current schema using the schema helpers; `onUpgrade` runs
 the applicable version steps in order.
 
@@ -24,9 +24,11 @@ the applicable version steps in order.
 | Table                          | Main columns and purpose                                                                                                                                                                                    |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `templates`                    | `id`, `title`, `sport`, `duration_minutes`, `description`, `warmup`, `hockey_type`, `distance_km`, `sport_details`, `cycle_count`, legacy `cadence`                                                         |
-| `template_exercises`           | `id`, `template_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`                                                                                                                    |
-| `workouts`                     | `id`, `template_id`, `title`, `sport`, `scheduled_at`, `duration_minutes`, `notes`, `warmup`, `details`, `status`, `comment`, `completed_at`, `hockey_type`, `distance_km`, `cycle_count`, `target_duration_minutes`, `target_distance_km`, legacy `cadence` |
-| `workout_exercises`            | `id`, `workout_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`                                                                                                                     |
+| `template_exercises`           | `id`, `template_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`, `library_id`, `weight_mode`                                                                                                                    |
+| `workouts`                     | `id`, `template_id`, `title`, `sport`, `scheduled_at`, `duration_minutes`, `notes`, `warmup`, `details`, `status`, `comment`, `completed_at`, `hockey_type`, `distance_km`, `cycle_count`, `target_duration_minutes`, `target_distance_km`, `started_at`, `body_weight_kg`, legacy `cadence` |
+| `workout_exercises`            | `id`, `workout_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`, `library_id`, `weight_mode`                                                                                                                     |
+| `exercise_library` | `id`, `name`, unique `name_key`, `unit`, `weight_mode`, `archived`, `tracked`, `needs_review` |
+| `gym_sets` | Composite key `exercise_id`, `position`; `amount`, `weight_kg`, `confirmed` |
 | `weekly_requirements`          | `id`, `name`, `target_count`                                                                                                                                                                                |
 | `weekly_requirement_templates` | Composite primary key: `requirement_id`, `template_id`                                                                                                                                                      |
 | `weight_entries`               | `id`, `weight_kg`, `recorded_at`                                                                                                                                                                            |
@@ -44,6 +46,9 @@ by the current models. For timed exercises, `reps` holds a count of seconds and
 erDiagram
     templates ||--o{ template_exercises : contains
     workouts ||--o{ workout_exercises : contains
+    exercise_library ||--o{ template_exercises : identifies
+    exercise_library ||--o{ workout_exercises : identifies
+    workout_exercises ||--o{ gym_sets : records
     weekly_requirements ||--o{ weekly_requirement_templates : accepts
     templates ||--o{ weekly_requirement_templates : eligible
 ```
@@ -62,7 +67,7 @@ with other eligible templates remains with its existing target count.
 
 SQLite checks positive workout/template duration, exercise sets and amounts,
 cycle counts, weights for weigh-ins, weekly target counts, and daily step goals.
-Steps may be zero. Reminder weekday/hour/minute values are range checked.
+Gym set amounts and steps may be zero. Reminder weekday/hour/minute values are range checked.
 Exercise loads can be zero or negative; they are not constrained like body weight.
 Workout status is restricted to `planned` or `completed`. Form validation adds
 requirements such as nonempty names and eligible template selection; not all
@@ -74,6 +79,12 @@ template/workout and link queries for each weekly requirement. There is no
 pagination. Templates sort by sport then title; workouts by scheduled date
 ascending; weigh-ins and step days descending; requirements by name.
 
+Gym library references are foreign keys with no deletion cascade; library items
+are archived instead of deleted. Deleting a workout cascades through exercises
+to gym sets. The legacy exercise `sets`, `reps`, and `weight_kg` columns retain
+prescriptions/old aggregate values; `gym_sets` is authoritative for actual gym
+sets and allows zero amounts. Mobility continues using the aggregate columns.
+
 ## Atomic operations
 
 | Operation               | Writes in the transaction                                            |
@@ -83,6 +94,9 @@ ascending; weigh-ins and step days descending; requirements by name.
 | Schedule workout        | Insert copied template details and independent exercise rows         |
 | Complete workout        | Update status, actual duration/running distance, comment, completion time; replace exercises |
 | Edit completed workout  | Update snapshot fields and training date/comment; replace exercises |
+| Start gym session | Check reviewed exercise modes and required weigh-in; snapshot start/bodyweight |
+| Save/finish gym session | Update duration/comment/status and replace exercise/set snapshots atomically |
+| Save library exercise | Insert/update identity and resolve matching unclassified migration entries |
 | Save weekly requirement | Insert/update requirement and replace eligible-template links        |
 
 Rescheduling, deleting workouts, and other simple writes use individual database
@@ -94,14 +108,17 @@ several are recorded on the same day.
 Editing a completed workout updates its existing row and replaces its ordered
 exercises in one transaction. The update requires the row to still be completed;
 a missing or non-completed row fails before exercises are replaced. The ID,
-`template_id`, `status`, `completed_at`, `target_duration_minutes`, and
-`target_distance_km` are not updated. Running target columns are nullable, with
+`template_id`, `status`, `completed_at`, `target_duration_minutes`,
+`target_distance_km`, and `started_at` are not updated. Gym history edits retain
+individual set values, and can explicitly correct the bodyweight snapshot.
+Running target columns are nullable, with
 positive-value checks. They are populated from the snapshot when scheduling a
 run, and never from the current template when editing or completing it.
 
 Completion overwrites duration and exercise values on the workout. For running,
 it also writes actual distance to `distance_km`; original targets remain in
-`target_duration_minutes` and `target_distance_km`. Other sports do not retain
+`target_duration_minutes` and `target_distance_km`. Gym retains the exercise
+prescription alongside actual individual sets. Other sports do not retain
 separate planned and actual versions. Pace is calculated, not stored. Completion
 requires the row to still be planned and saves all related values atomically.
 No backup/export or cloud sync is implemented.
@@ -120,6 +137,7 @@ No backup/export or cloud sync is implemented.
 | 8       | Clears running warm-up, cadence, and sport details on templates/workouts              |
 | 9       | Weekly requirements and eligible-template links                                       |
 | 10      | Nullable running target duration/distance; backfill pending runs only                  |
+| 11      | Exercise library, identity/mode links, individual gym sets, start/bodyweight snapshots |
 
 Version 10 adds running target columns on both fresh creation and upgrade.
 Only pending running workouts are backfilled from their own duration/distance;
@@ -127,6 +145,20 @@ a missing or nonpositive distance leaves its target distance null. Completed
 workouts keep all existing values and have null targets, since their original
 duration is no longer available. No templates, exercises, or history rows are
 deleted or rewritten by this migration beyond adding pending-run targets.
+
+Version 11 creates the library and gym-set tables and adds nullable identity/mode
+links and workout session columns. It groups gym names using the same Dart
+normalization as library creation. Imported library identities require review;
+occurrence modes remain null until review. Matching-unit occurrences can then be
+resolved without overwriting already established modes or units. Explicit link
+corrections are scoped to one occurrence.
+
+Each old gym exercise expands into `sets` rows using its saved amount and weight;
+completed workouts receive confirmed rows, pending workouts unconfirmed rows.
+Historical bodyweight is copied from the latest weigh-in no later than the
+scheduled timestamp. Missing weights remain null. No old workout, exercise, or
+weigh-in is deleted. Started sessions keep `status = planned` until finished;
+`started_at` distinguishes a resumable session without expanding the status enum.
 
 Fresh creation invokes schema helpers directly; the version-6 cleanup is needed
 only during upgrades. Column-addition helpers inspect `PRAGMA table_info` before

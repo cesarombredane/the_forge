@@ -1,4 +1,5 @@
 import 'package:path/path.dart';
+import 'package:the_forge/data/models/training.dart';
 import 'package:sqflite/sqflite.dart';
 
 class AppDatabase {
@@ -12,7 +13,7 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 10,
+      version: 11,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
@@ -24,6 +25,7 @@ class AppDatabase {
         await _simplifyRunningSchema(database);
         await _addWeeklyRequirementsSchema(database);
         await _addRunningTargets(database);
+        await _addGymProgression(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
@@ -35,6 +37,7 @@ class AppDatabase {
         if (oldVersion < 8) await _simplifyRunningSchema(database);
         if (oldVersion < 9) await _addWeeklyRequirementsSchema(database);
         if (oldVersion < 10) await _addRunningTargets(database);
+        if (oldVersion < 11) await _addGymProgression(database);
       },
     );
   }
@@ -278,6 +281,105 @@ class AppDatabase {
           target_distance_km = CASE WHEN distance_km > 0 THEN distance_km END
       WHERE sport = 'running' AND status = 'planned'
       ''');
+  }
+
+  Future<void> _addGymProgression(Database database) async {
+    await database.execute('''CREATE TABLE exercise_library (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL UNIQUE,
+      unit TEXT NOT NULL CHECK(unit IN ('reps', 'seconds')),
+      weight_mode TEXT NOT NULL CHECK(weight_mode IN ('external', 'bodyweight')),
+      archived INTEGER NOT NULL DEFAULT 0,
+      tracked INTEGER NOT NULL DEFAULT 0,
+      needs_review INTEGER NOT NULL DEFAULT 0
+    )''');
+    for (final table in ['template_exercises', 'workout_exercises']) {
+      await _addColumnIfMissing(
+        database,
+        table: table,
+        column: 'library_id',
+        definition: 'INTEGER REFERENCES exercise_library(id)',
+      );
+      await _addColumnIfMissing(
+        database,
+        table: table,
+        column: 'weight_mode',
+        definition: "TEXT CHECK(weight_mode IN ('external', 'bodyweight'))",
+      );
+    }
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'started_at',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      database,
+      table: 'workouts',
+      column: 'body_weight_kg',
+      definition: 'REAL CHECK(body_weight_kg > 0)',
+    );
+    await database.execute('''CREATE TABLE gym_sets (
+      exercise_id INTEGER NOT NULL REFERENCES workout_exercises(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      amount INTEGER NOT NULL CHECK(amount >= 0),
+      weight_kg REAL NOT NULL,
+      confirmed INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(exercise_id, position)
+    )''');
+    final identities = <String, int>{};
+    for (final source in [
+      ('template_exercises', 'templates', 'template_id'),
+      ('workout_exercises', 'workouts', 'workout_id'),
+    ]) {
+      final rows = await database.rawQuery(
+        "SELECT e.* FROM ${source.$1} e JOIN ${source.$2} p ON p.id = e.${source.$3} WHERE p.sport = 'gym' ORDER BY e.id",
+      );
+      for (final row in rows) {
+        final name = row['name'] as String;
+        final key = exerciseKey(name);
+        final id =
+            identities[key] ??
+            await database.insert('exercise_library', {
+              'name': name.trim(), 'name_key': key, 'unit': row['unit'],
+              // Old positive values may be added bodyweight load. Ask the owner
+              // to confirm the mode instead of guessing from a name.
+              'weight_mode': (row['weight_kg'] as num) <= 0
+                  ? 'bodyweight'
+                  : 'external',
+              'needs_review': 1,
+            });
+        identities[key] = id;
+        await database.update(
+          source.$1,
+          {'library_id': id},
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+    }
+    await database.execute('''UPDATE workouts SET body_weight_kg = (
+      SELECT weight_kg FROM weight_entries
+      WHERE recorded_at <= workouts.scheduled_at ORDER BY recorded_at DESC LIMIT 1
+    ) WHERE sport = 'gym' AND status = 'completed'
+    ''');
+    final rows = await database.rawQuery(
+      '''SELECT e.*, w.status FROM workout_exercises e
+      JOIN workouts w ON w.id = e.workout_id WHERE w.sport = 'gym'
+    ''',
+    );
+    for (final row in rows) {
+      for (var index = 0; index < (row['sets'] as int); index++) {
+        await database.insert('gym_sets', {
+          'exercise_id': row['id'],
+          'position': index,
+          'amount': row['reps'],
+          'weight_kg': row['weight_kg'],
+          'confirmed': row['status'] == 'completed' ? 1 : 0,
+        });
+      }
+    }
   }
 
   Future<void> _addColumnIfMissing(

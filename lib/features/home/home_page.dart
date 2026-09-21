@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:the_forge/features/exercises/exercises_page.dart';
+import 'package:the_forge/features/performance/performance_page.dart';
+import 'package:the_forge/features/workouts/gym_session_page.dart';
 import 'package:the_forge/app/app_controller.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/features/templates/template_form_page.dart';
@@ -9,7 +12,16 @@ import 'package:the_forge/features/weight/weight_page.dart';
 import 'package:the_forge/features/weekly_plan/weekly_plan_page.dart';
 import 'package:the_forge/theme/app_colors.dart';
 
-enum _Page { planning, templates, history, weight, steps, weeklyPlan }
+enum _Page {
+  planning,
+  templates,
+  history,
+  weight,
+  steps,
+  weeklyPlan,
+  exercises,
+  performance,
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -81,6 +93,8 @@ class _HomePageState extends State<HomePage> {
     _Page.weight => 'Weight',
     _Page.steps => 'Steps',
     _Page.weeklyPlan => 'Weekly plan',
+    _Page.exercises => 'Exercises',
+    _Page.performance => 'Performance',
   };
 
   Widget _body() {
@@ -90,6 +104,8 @@ class _HomePageState extends State<HomePage> {
     return switch (_page) {
       _Page.planning =>
         _planningCalendarView ? _calendarPlanningView() : _weekPlanningView(),
+      _Page.exercises => ExercisesPage(controller: widget.controller),
+      _Page.performance => PerformancePage(controller: widget.controller),
       _Page.templates => _templatesView(),
       _Page.history => _historyView(),
       _Page.weight => WeightPage(controller: widget.controller),
@@ -113,6 +129,8 @@ class _HomePageState extends State<HomePage> {
         icon: const Icon(Icons.add),
         label: const Text('Add to calendar'),
       ),
+      _Page.exercises => null,
+      _Page.performance => null,
       _Page.history => null,
       _Page.weight => null,
       _Page.steps => null,
@@ -159,6 +177,14 @@ class _HomePageState extends State<HomePage> {
     final days = List.generate(7, (index) => today.add(Duration(days: index)));
     return Column(
       children: [
+        for (final workout in widget.controller.planned.where(
+          (w) => w.sport == Sport.gym && w.startedAt != null,
+        ))
+          ListTile(
+            leading: const Icon(Icons.play_circle_outline),
+            title: Text('Resume ${workout.title}'),
+            onTap: () => _complete(workout),
+          ),
         _WeeklyPlanAlert(
           controller: widget.controller,
           onOpen: () => setState(() => _page = _Page.weeklyPlan),
@@ -251,8 +277,14 @@ class _HomePageState extends State<HomePage> {
                         details: _workoutDetails(workout),
                         description: workout.description,
                         warmup: workout.warmup,
-                        primaryLabel: 'Mark as done',
-                        primaryIcon: Icons.check,
+                        primaryLabel: workout.sport == Sport.gym
+                            ? (workout.startedAt == null
+                                  ? 'Start workout'
+                                  : 'Resume workout')
+                            : 'Mark as done',
+                        primaryIcon: workout.sport == Sport.gym
+                            ? Icons.play_arrow
+                            : Icons.check,
                         onPrimary: () => _complete(workout),
                         onEdit: () => _reschedule(workout),
                         editLabel: 'Reschedule',
@@ -310,7 +342,10 @@ class _HomePageState extends State<HomePage> {
     final result = await Navigator.push<Workout>(
       context,
       MaterialPageRoute(
-        builder: (_) => TemplateFormPage.workout(workout: workout),
+        builder: (_) => TemplateFormPage.workout(
+          controller: widget.controller,
+          workout: workout,
+        ),
       ),
     );
     if (result != null && mounted) {
@@ -321,7 +356,10 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openTemplateForm([WorkoutTemplate? template]) async {
     final result = await Navigator.push<WorkoutTemplate>(
       context,
-      MaterialPageRoute(builder: (_) => TemplateFormPage(template: template)),
+      MaterialPageRoute(
+        builder: (_) =>
+            TemplateFormPage(controller: widget.controller, template: template),
+      ),
     );
     if (result != null && mounted) {
       await _perform(() => widget.controller.saveTemplate(result));
@@ -384,6 +422,39 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _complete(Workout workout) async {
+    if (workout.sport == Sport.gym) {
+      if (workout.startedAt == null &&
+          workout.exercises.any((e) => e.weightMode == WeightMode.bodyweight) &&
+          !widget.controller.weightEntries.any(
+            (w) => !w.recordedAt.isAfter(DateTime.now()),
+          )) {
+        final weight = await showWeightEntryDialog(context);
+        if (weight == null || !mounted) return;
+        try {
+          await widget.controller.addWeight(weight);
+        } catch (_) {
+          if (mounted) _showError();
+          return;
+        }
+      }
+      try {
+        await widget.controller.startGym(workout.id!);
+        if (!mounted) return;
+        final started = widget.controller.workouts.firstWhere(
+          (w) => w.id == workout.id,
+        );
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                GymSessionPage(controller: widget.controller, workout: started),
+          ),
+        );
+      } catch (_) {
+        if (mounted) _showError();
+      }
+      return;
+    }
     final result = await showDialog<WorkoutCompletion>(
       context: context,
       builder: (_) => WorkoutCompletionDialog(workout: workout),
@@ -550,6 +621,8 @@ class _NavigationDrawer extends StatelessWidget {
             _item(Icons.calendar_month_outlined, 'Planning', _Page.planning),
             _item(Icons.copy_all_outlined, 'Templates', _Page.templates),
             _item(Icons.history, 'History', _Page.history),
+            _item(Icons.fitness_center, 'Exercises', _Page.exercises),
+            _item(Icons.show_chart, 'Performance', _Page.performance),
             _item(Icons.monitor_weight_outlined, 'Weight', _Page.weight),
             _item(Icons.directions_walk, 'Steps', _Page.steps),
             _item(Icons.checklist, 'Weekly plan', _Page.weeklyPlan),
@@ -741,9 +814,17 @@ class _PlanningWorkoutTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: 'Mark as done',
+            tooltip: workout.sport == Sport.gym
+                ? (workout.startedAt == null
+                      ? 'Start workout'
+                      : 'Resume workout')
+                : 'Mark as done',
             onPressed: onComplete,
-            icon: const Icon(Icons.check_circle_outline),
+            icon: Icon(
+              workout.sport == Sport.gym
+                  ? Icons.play_circle_outline
+                  : Icons.check_circle_outline,
+            ),
           ),
           PopupMenuButton<String>(
             onSelected: (action) {
@@ -1276,6 +1357,12 @@ String _details({
     lines.add('$cycleCount ${cycleCount == 1 ? 'cycle' : 'cycles'}');
   }
   for (final exercise in exercises) {
+    if (sport == Sport.gym && exercise.workingSets.isNotEmpty) {
+      lines.add(
+        '${exercise.name}: ${exercise.workingSets.map((s) => '${_number(s.weightKg)} kg × ${s.amount} ${exercise.unit.name}${s.amount == 0 ? ' (skipped)' : ''}').join(' / ')}',
+      );
+      continue;
+    }
     final weight = exercise.weightKg == 0
         ? 'bodyweight'
         : '${_number(exercise.weightKg)} kg';

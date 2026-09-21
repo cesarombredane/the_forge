@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:the_forge/data/repositories/exercise_repository.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/data/repositories/template_repository.dart';
 import 'package:the_forge/data/repositories/step_repository.dart';
@@ -20,6 +21,9 @@ class AppController extends ChangeNotifier {
        _weeklyRequirementRepository =
            weeklyRequirementRepository ?? WeeklyRequirementRepository();
 
+  final ExerciseRepository _exerciseRepository = ExerciseRepository();
+  final List<LibraryExercise> _library = [];
+  List<LibraryExercise> get exerciseLibrary => List.unmodifiable(_library);
   final TemplateRepository _templateRepository;
   final WorkoutRepository _workoutRepository;
   final WeightRepository _weightRepository;
@@ -67,6 +71,35 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<int> saveExercise({
+    int? id,
+    required String name,
+    required ExerciseUnit unit,
+    required WeightMode mode,
+  }) async {
+    var result = 0;
+    await _run(() async {
+      result = await _exerciseRepository.save(
+        id: id,
+        name: name,
+        unit: unit,
+        mode: mode,
+      );
+    });
+    return result;
+  }
+
+  Future<void> setExerciseFlag(int id, {bool? archived, bool? tracked}) => _run(
+    () => _exerciseRepository.setFlag(id, archived: archived, tracked: tracked),
+  );
+  Future<List<ExerciseLink>> exerciseLinks(int id) =>
+      _exerciseRepository.links(id);
+  Future<void> relinkExercise(ExerciseLink link, LibraryExercise target) =>
+      _run(() => _exerciseRepository.relink(link, target));
+  Future<void> startGym(int id) => _run(() => _workoutRepository.startGym(id));
+  Future<void> saveGym(Workout workout, {bool finish = false}) =>
+      _run(() => _workoutRepository.saveGym(workout, finish: finish));
 
   Future<void> saveTemplate(WorkoutTemplate template) {
     return _run(() => _templateRepository.save(template));
@@ -170,6 +203,7 @@ class AppController extends ChangeNotifier {
       _stepRepository.getAll(),
       _stepRepository.getDailyGoal(),
       _weeklyRequirementRepository.getAll(),
+      _exerciseRepository.getAll(),
     ]);
     _templates
       ..clear()
@@ -188,6 +222,9 @@ class AppController extends ChangeNotifier {
     _weeklyRequirements
       ..clear()
       ..addAll(results[6] as List<WeeklyRequirement>);
+    _library
+      ..clear()
+      ..addAll(results[7] as List<LibraryExercise>);
     notifyListeners();
   }
 }

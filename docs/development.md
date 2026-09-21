@@ -85,6 +85,30 @@ For schema changes, check both fresh creation and upgrade of a disposable copy
 of an older database. Preserve the user's real local history; do not uninstall
 the app, clear its data, or reset its database as a migration workaround.
 
+## Gym progression verification
+
+Use disposable databases for migration and persistence checks. Check version-10
+upgrades and fresh version-11 creation, normalized-name linking, unit conflicts,
+review resolution, historical bodyweight selection, set expansion, and foreign-key
+integrity. Confirm unrelated sports, running targets, and existing history survive.
+
+On a device, create/select library exercises, review imported identities, archive
+an exercise, and correct a link. Start a gym session with and without a weigh-in;
+verify bodyweight requirements, assistance validation, individual set values,
+zero skips, and unconfirmed-set completion blocking. Leave/restart/resume and
+confirm the comment, set values, and bodyweight snapshot persist. Change the
+source template and record a new weigh-in; existing session snapshots must hold.
+
+Check calculations with known examples: `60×10 + 60×9 + 55×10 = 1690`, maximum
+weight 60; at 90 kg bodyweight, `-20×10` means 700 kg·reps. Check timed exercises,
+entirely skipped entries, missing historical weights, and duplicate occurrences
+in one workout. Verify tracked selections persist, graph point selection works,
+and history edits/deletions refresh both gym and running charts.
+
+No permanent automated test suite is included. Disposable validation harnesses
+may exercise migration, repository, calculation, and widget behavior without
+modifying production data or the repository's dependency manifests.
+
 ## Android build notes
 
 The checked-in Gradle wrapper specifies Gradle 9.1.0. Settings declare Android

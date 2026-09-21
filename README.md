@@ -12,15 +12,20 @@ Create a template -> Schedule a workout -> Complete it -> Review history
 ## Features
 
 - **Templates:** create, edit, delete, and reuse sport-specific sessions.
-  Gym exercises support sets, repetitions or seconds, loads, and per-side options.
+  Gym exercises come from a shared exercise library and support working sets,
+  repetitions or seconds, loads, and per-side options.
   Running uses duration and distance to calculate pace. Hockey records session
   type and details. Mobility repeats an ordered list of movements over cycles.
 - **Planning:** schedule workouts at a date and time, view pending sessions in a
   seven-day agenda or monthly calendar, and reschedule or delete them.
-- **Completion and history:** record actual duration, adjust existing gym or
-  mobility exercise values, add a comment, and review or fully edit completed
-  workouts in History. Running completion records actual distance and compares
+- **Gym sessions:** start or resume a workout, see each exercise’s previous
+  performance, and record individual working sets with automatic local saving.
+- **Completion and history:** record actual duration, adjust mobility exercise
+  values, add a comment, and review or edit completed workouts in History.
+  Running completion records actual distance and compares
   duration, distance, and pace with the saved targets.
+- **Performance:** choose gym exercises to graph their weight and total load;
+  follow running pace, distance, and duration over completed sessions.
 - **Weekly plan:** set Monday-to-Sunday targets accepting one template or a group
   of templates. Both scheduled and completed sessions count toward these targets.
 - **Weight:** record weigh-ins, review history and a chart, and display a recurring

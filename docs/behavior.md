@@ -15,9 +15,11 @@ and an optional description. Templates are listed by sport then title.
 | Hockey   | Warm-up; championship, friendly, training, coaching, or tournament type; position/session details |
 | Mobility | Positive cycle count; ordered movements with repetitions or seconds and per-side flag             |
 
-Gym and mobility require at least one exercise. Their exercises can be added,
-edited, removed, and reordered. Gym loads accept zero (displayed as bodyweight)
-and negative values. Mobility movements store one set and zero load; the template
+Gym and mobility templates require at least one exercise. Their exercises can
+be added, edited, removed, and reordered. Gym exercises are selected from the
+exercise library; mobility movements retain free-text names. Gym loads follow the
+selected exercise’s weight mode: external load is
+nonnegative; bodyweight adjustments may be negative for assistance. Mobility movements store one set and zero load; the template
 cycle count represents repetition of the whole movement sequence. Switching
 sports involving gym or mobility clears the editor's exercise list.
 
@@ -45,9 +47,9 @@ deletion require confirmation and are permanent.
 
 ## Completion and history
 
-Completion accepts a positive actual duration and optional comment. Existing
-exercise values can be adjusted: gym sets, amount, load, unit, and per-side flag;
-mobility amount, unit, and per-side flag. The dialog does not add/remove/rename
+Non-gym completion accepts a positive actual duration and optional comment.
+Existing mobility amount, unit, and per-side values can be adjusted. Gym uses
+the start/resume workflow described below. The dialog does not add/remove/rename
 exercises, change hockey details, or change mobility cycles. Runs also accept a
 positive actual distance in km, with a decimal comma or dot. Duration remains
 a positive whole number of minutes. Both inputs start from the scheduled values.
@@ -55,8 +57,8 @@ a positive whole number of minutes. Both inputs start from the scheduled values.
 Saving sets status to `completed`, records the current completion timestamp, and
 replaces the workout duration and exercise rows. For running it also saves actual
 distance, while retaining separate original target duration and distance from
-the scheduled snapshot. Other sports do not store separate planned and actual
-values.
+the scheduled snapshot. Gym keeps its exercise prescription alongside individual working-set results;
+other non-running sports do not store separate planned and actual values.
 
 Run completion, History, and History editing show Target, Actual, and Difference
 for duration, distance, and pace. Pace is duration × 60 / distance, rounded to
@@ -78,8 +80,10 @@ History displays completed workouts in descending **scheduled** date order, not
 completion-time order. Every completed session has Edit and Delete actions in its
 menu, including sessions whose source template was deleted. Edit opens the saved snapshot with
 its name, sport, training date/time, duration, description, warm-up, comment,
-and sport-specific fields. Gym and mobility exercises can be added, renamed,
-edited, removed, and reordered using the same validation as templates.
+and sport-specific fields. Gym and mobility exercises can be added, edited, removed, and reordered in
+History. Gym entries use library identities, and each working set is editable
+without flattening differing weights or amounts. Historical bodyweight snapshots
+can be corrected here; these corrections do not create new weigh-ins.
 The running editor calculates pace from the edited duration and distance.
 
 Saving changes only that workout and its exercises; its original template link,
@@ -92,6 +96,83 @@ to use the original template ID, even if the workout name or sport changes.
 Running targets remain read-only even if the sport is changed and later changed
 back. A completed session changed from another sport to running has no original
 running targets. Completed sessions cannot be changed back to planned.
+
+## Exercise library and gym sessions
+
+Create gym exercises in Exercises or from a template's exercise picker. Names
+are unique after trimming, lowercasing, and collapsing whitespace. Each exercise
+has a stable ID, a reps/seconds unit, and an external-load/bodyweight mode.
+Library renaming and archiving preserve existing workout and template snapshots.
+Archived exercises remain usable in existing sessions but cannot be newly picked.
+Library edits supply defaults for subsequent selections; established snapshots
+keep their units and modes until explicitly corrected.
+
+Version-11 migration links matching gym names across all templates and workouts.
+Imported entries require one-time weight-mode review in Exercises. Confirming a
+mode resolves unclassified entries with the same unit. Conflicting units remain
+unresolved: use **Review / correct links** to choose or create an exercise with
+that unit. Link correction preserves recorded names and set values but applies
+the selected identity and mode to that occurrence. Links in an in-progress
+session can be corrected after finishing it. Mobility is not migrated.
+Old aggregate entries become identical individual sets; past uneven sets and
+unmarked warm-up sets cannot be reconstructed.
+
+Planning offers Start workout for gym sessions and Resume workout after starting.
+The seven-day list also exposes in-progress sessions outside its date window.
+The exercise list and number of working sets are fixed from the scheduled
+snapshot. Template changes do not affect it. Each set records a weight and
+nonnegative reps or seconds. Zero means skipped and confirms the skip; other
+sets must be checked explicitly. Prefilled values are not completed results.
+Warm-up sets are not recorded. The existing per-side flag remains descriptive;
+calculations do not apply an extra multiplier.
+
+The screen shows the most recent earlier completed performance for the same
+exercise ID and unit across all templates, sorted by training date, excluding
+the current workout and wholly skipped performances. It shows individual sets
+and the previous bodyweight where relevant. There are no overload suggestions,
+effort ratings, or exercise-specific notes; the training comment remains available.
+
+Valid edits save automatically in order. Leaving waits for writes and preserves
+the session for resuming after an app restart. Invalid fields must be corrected;
+write failures show Retry and block exit until saved. Finishing requires every
+set to be confirmed or skipped and a positive actual duration. Only finishing
+moves the workout into History; in-progress sessions still count as planned for
+weekly requirements.
+
+External-load weight is the entire entered load, including both dumbbells.
+Bodyweight effective load is the session bodyweight plus the entered adjustment:
+0 is unassisted, a negative number is assistance, and a positive number is added
+load. Assistance cannot exceed bodyweight. Starting a session with bodyweight
+exercises requires a weigh-in; if absent, the app prompts for one. The latest
+weigh-in no later than start time is frozen on the session, so later weigh-ins
+or deletion of that weigh-in do not change completed results.
+
+Historical gym sessions receive the latest weigh-in on or before their training
+timestamp during migration. If none exists, keep the record but supply its
+bodyweight snapshot through History before calculating bodyweight performance.
+
+## Performance
+
+Performance has Gym and Running tabs. Hockey performance is deferred; mobility
+is excluded. All charts use completed sessions and chronological training dates.
+Tapping a point or using the previous/next buttons shows the workout and exact
+values. History edits/deletions update charts. No date-range filter is implemented.
+
+Choose any library exercises to track in Gym; the selection is saved locally.
+Each exercise has two lines with separately labelled axes: highest effective
+working-set weight (kg), and the sum of effective weight × amount across working
+sets (kg·reps or kg·seconds). One workout gives one point, including when the
+same exercise appears multiple times in it. Skipped and unconfirmed sets do not
+contribute. A wholly skipped exercise produces no point. Missing bodyweight,
+unresolved modes, or invalid effective loads prevent a partial total from being
+shown; entries with a unit different from the library's selected unit are excluded.
+A 90 kg bodyweight exercise with 20 kg assistance and 10 reps contributes
+`(90 - 20) × 10 = 700 kg·reps`.
+
+Running has three aligned charts: actual pace (min/km), distance (km), and duration
+(minutes), one point per completed run with valid duration and distance. These
+show results, not targets. Pace derives from the recorded whole-minute duration;
+there are no splits, GPS records, or additional timing precision.
 
 ## Weekly requirements
 
@@ -158,5 +239,5 @@ can set or edit the goal, but does not offer removal.
 ## Scope
 
 All of these features use local storage. No accounts, cloud sync, automatic step
-counting, GPS recording, background notifications, gamification, or general
-training-statistics dashboard are implemented.
+counting, GPS recording, background notifications, gamification, or hockey
+performance statistics are implemented.

@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:the_forge/app/app_controller.dart';
+import 'package:the_forge/features/exercises/exercises_page.dart';
+import 'package:the_forge/features/workouts/gym_set_fields.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/features/workouts/running_comparison.dart';
 
 class TemplateFormPage extends StatefulWidget {
-  const TemplateFormPage({super.key, this.template}) : workout = null;
+  const TemplateFormPage({super.key, required this.controller, this.template})
+    : workout = null;
 
-  const TemplateFormPage.workout({super.key, required Workout this.workout})
-    : template = null;
+  const TemplateFormPage.workout({
+    super.key,
+    required this.controller,
+    required Workout this.workout,
+  }) : template = null;
 
+  final AppController controller;
   final WorkoutTemplate? template;
   final Workout? workout;
 
@@ -29,11 +37,15 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   late List<Exercise> _exercises;
   late final TextEditingController _comment;
   DateTime? _scheduledAt;
+  late final TextEditingController _bodyweight;
 
   @override
   void initState() {
     super.initState();
     final workout = widget.workout;
+    _bodyweight = TextEditingController(
+      text: workout?.bodyWeightKg?.toString() ?? '',
+    );
     final template =
         widget.template ??
         (workout == null
@@ -80,6 +92,7 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     _sportDetails.dispose();
     _cycles.dispose();
     _comment.dispose();
+    _bodyweight.dispose();
     super.dispose();
   }
 
@@ -195,6 +208,27 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
               ],
               const SizedBox(height: 24),
               ..._sportFields(),
+              if (widget.workout != null && _sport == Sport.gym) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _bodyweight,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Session bodyweight',
+                    suffixText: 'kg',
+                    helperText: 'Historical snapshot, not a new weigh-in',
+                  ),
+                  validator: (v) =>
+                      (v ?? '').isEmpty &&
+                          !_exercises.any(
+                            (e) => e.weightMode == WeightMode.bodyweight,
+                          )
+                      ? null
+                      : _positiveDouble(v),
+                ),
+              ],
               if (widget.workout != null) ...[
                 const SizedBox(height: 24),
                 TextFormField(
@@ -348,21 +382,84 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
 
   Future<void> _editExercise({int? index, required bool mobility}) async {
     FocusScope.of(context).unfocus();
+    Exercise? initial = index == null ? null : _exercises[index];
+    LibraryExercise? library;
+    if (!mobility) {
+      library = widget.controller.exerciseLibrary
+          .where((e) => e.id == initial?.libraryId)
+          .firstOrNull;
+      if (widget.workout != null && initial != null && library != null) {
+        final action = await showModalBottomSheet<String>(
+          context: context,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('Edit working sets'),
+                  onTap: () => Navigator.pop(context, 'sets'),
+                ),
+                ListTile(
+                  title: const Text('Change linked exercise'),
+                  onTap: () => Navigator.pop(context, 'link'),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (!mounted || action == null) return;
+        if (action == 'link') {
+          final selected = await pickLibraryExercise(
+            context,
+            widget.controller,
+            unit: initial.unit,
+          );
+          if (!mounted || selected == null) return;
+          setState(
+            () => _exercises[index!] = initial.copyWith(
+              name: selected.name,
+              libraryId: selected.id,
+              weightMode: selected.weightMode,
+            ),
+          );
+        } else {
+          final result = await editGymWorkingSets(
+            context,
+            initial,
+            double.tryParse(_bodyweight.text.replaceAll(',', '.')),
+          );
+          if (mounted && result != null)
+            setState(() => _exercises[index!] = result);
+        }
+        return;
+      }
+      if (library == null || library.needsReview) {
+        library = await pickLibraryExercise(context, widget.controller);
+        if (!mounted || library == null) return;
+      }
+    }
     final result = await showDialog<Exercise>(
       context: context,
       builder: (_) => _ExerciseDialog(
-        exercise: index == null ? null : _exercises[index],
+        exercise: initial,
         mobility: mobility,
+        library: library,
+        controller: widget.controller,
       ),
     );
-    if (!mounted) return;
-    FocusScope.of(context).unfocus();
-    if (result == null) return;
+    if (!mounted || result == null) return;
+    final saved = widget.workout != null && !mobility
+        ? result.copyWith(
+            workingSets: result.prescribedSets
+                .map((s) => s.copyWith(confirmed: true))
+                .toList(),
+          )
+        : result;
     setState(() {
       if (index == null) {
-        _exercises.add(result);
+        _exercises.add(saved);
       } else {
-        _exercises[index] = result;
+        _exercises[index] = saved;
       }
     });
   }
@@ -431,29 +528,38 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
     if (workout == null) {
       Navigator.pop(context, values);
     } else {
-      Navigator.pop(
-        context,
-        Workout(
-          id: workout.id,
-          templateId: workout.templateId,
-          title: values.title,
-          sport: values.sport,
-          scheduledAt: _scheduledAt!,
-          durationMinutes: values.durationMinutes,
-          description: values.description,
-          warmup: values.warmup,
-          status: workout.status,
-          hockeyType: values.hockeyType,
-          distanceKm: values.distanceKm,
-          sportDetails: values.sportDetails,
-          exercises: values.exercises,
-          cycleCount: values.cycleCount,
-          comment: _comment.text.trim(),
-          completedAt: workout.completedAt,
-          targetDurationMinutes: workout.targetDurationMinutes,
-          targetDistanceKm: workout.targetDistanceKm,
-        ),
+      final updated = Workout(
+        id: workout.id,
+        templateId: workout.templateId,
+        title: values.title,
+        sport: values.sport,
+        scheduledAt: _scheduledAt!,
+        durationMinutes: values.durationMinutes,
+        description: values.description,
+        warmup: values.warmup,
+        status: workout.status,
+        hockeyType: values.hockeyType,
+        distanceKm: values.distanceKm,
+        sportDetails: values.sportDetails,
+        exercises: values.exercises,
+        cycleCount: values.cycleCount,
+        comment: _comment.text.trim(),
+        completedAt: workout.completedAt,
+        targetDurationMinutes: workout.targetDurationMinutes,
+        targetDistanceKm: workout.targetDistanceKm,
+        startedAt: workout.startedAt,
+        bodyWeightKg: double.tryParse(_bodyweight.text.replaceAll(',', '.')),
       );
+      try {
+        if (updated.sport == Sport.gym)
+          validateGymWorkout(updated, finishing: true);
+      } catch (error) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+        return;
+      }
+      Navigator.pop(context, updated);
     }
   }
 
@@ -482,10 +588,17 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
 }
 
 class _ExerciseDialog extends StatefulWidget {
-  const _ExerciseDialog({this.exercise, required this.mobility});
+  const _ExerciseDialog({
+    this.exercise,
+    required this.mobility,
+    this.library,
+    required this.controller,
+  });
 
   final Exercise? exercise;
   final bool mobility;
+  final LibraryExercise? library;
+  final AppController controller;
 
   @override
   State<_ExerciseDialog> createState() => _ExerciseDialogState();
@@ -499,16 +612,18 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
   late final TextEditingController _weight;
   late ExerciseUnit _unit;
   late bool _perSide;
+  LibraryExercise? _library;
 
   @override
   void initState() {
     super.initState();
     final exercise = widget.exercise;
-    _name = TextEditingController(text: exercise?.name ?? '');
+    _library = widget.library;
+    _name = TextEditingController(text: _library?.name ?? exercise?.name ?? '');
     _sets = TextEditingController(text: exercise?.sets.toString() ?? '3');
     _reps = TextEditingController(text: exercise?.reps.toString() ?? '10');
     _weight = TextEditingController(text: exercise?.weightKg.toString() ?? '0');
-    _unit = exercise?.unit ?? ExerciseUnit.reps;
+    _unit = _library?.unit ?? exercise?.unit ?? ExerciseUnit.reps;
     _perSide = exercise?.perSide ?? false;
   }
 
@@ -533,9 +648,30 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
             children: [
               TextFormField(
                 controller: _name,
-                autofocus: true,
+                autofocus: widget.mobility,
+                readOnly: !widget.mobility,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Exercise name'),
+                decoration: InputDecoration(
+                  labelText: 'Exercise name',
+                  suffixIcon: widget.mobility
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.swap_horiz),
+                          tooltip: 'Choose exercise',
+                          onPressed: () async {
+                            final selected = await pickLibraryExercise(
+                              context,
+                              widget.controller,
+                            );
+                            if (mounted && selected != null)
+                              setState(() {
+                                _library = selected;
+                                _name.text = selected.name;
+                                _unit = selected.unit;
+                              });
+                          },
+                        ),
+                ),
                 validator: (value) => value == null || value.trim().isEmpty
                     ? 'Enter a name'
                     : null,
@@ -550,8 +686,9 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
                   ),
                 ],
                 selected: {_unit},
-                onSelectionChanged: (selection) =>
-                    setState(() => _unit = selection.first),
+                onSelectionChanged: widget.mobility
+                    ? (selection) => setState(() => _unit = selection.first)
+                    : null,
               ),
               const SizedBox(height: 12),
               if (widget.mobility)
@@ -595,7 +732,12 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
                     final number = double.tryParse(
                       (value ?? '').replaceAll(',', '.'),
                     );
-                    return number == null ? 'Enter a number' : null;
+                    if (number == null || !number.isFinite)
+                      return 'Enter a valid number';
+                    return _library?.weightMode == WeightMode.external &&
+                            number < 0
+                        ? 'External load cannot be negative'
+                        : null;
                   },
                 ),
               ],
@@ -633,7 +775,11 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
         name: _name.text.trim(),
         sets: widget.mobility ? 1 : int.parse(_sets.text),
         reps: int.parse(_reps.text),
-        weightKg: widget.mobility ? 0 : double.parse(_weight.text),
+        weightKg: widget.mobility
+            ? 0
+            : double.parse(_weight.text.replaceAll(',', '.')),
+        libraryId: widget.mobility ? null : _library?.id,
+        weightMode: widget.mobility ? null : _library?.weightMode,
         unit: _unit,
         perSide: _perSide,
       ),
@@ -642,6 +788,14 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
 }
 
 String _exerciseSummary(Exercise exercise, {required bool mobility}) {
+  if (!mobility && exercise.workingSets.isNotEmpty) {
+    return exercise.workingSets
+        .map(
+          (s) =>
+              '${s.weightKg} kg × ${s.amount} ${exercise.unit.name}${s.amount == 0 ? ' (skipped)' : ''}',
+        )
+        .join(' · ');
+  }
   final weight = exercise.weightKg == 0
       ? 'bodyweight'
       : '${_compactNumber(exercise.weightKg)} kg';

@@ -424,3 +424,28 @@ void validateGymWorkout(Workout workout, {required bool finishing}) {
     }
   }
 }
+
+// For mobility, workingSets contains one result per cycle; its load is always zero.
+void validateMobilityWorkout(
+  Workout workout, {
+  required bool finishing,
+  bool allowUnknown = false,
+}) {
+  if (workout.durationMinutes <= 0 ||
+      workout.cycleCount <= 0 ||
+      workout.exercises.isEmpty)
+    throw ArgumentError(
+      'Enter a positive duration, cycles, and at least one movement.',
+    );
+  for (final e in workout.exercises) {
+    if (allowUnknown && e.workingSets.isEmpty) continue;
+    if (e.workingSets.length != workout.cycleCount)
+      throw ArgumentError(
+        'Edit ${e.name}: record a result for each of the ${workout.cycleCount} cycles.',
+      );
+    if (e.workingSets.any(
+      (s) => s.amount < 0 || s.weightKg != 0 || (finishing && !s.confirmed),
+    ))
+      throw ArgumentError('Confirm every movement or enter 0 to skip.');
+  }
+}

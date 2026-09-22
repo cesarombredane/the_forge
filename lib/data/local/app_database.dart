@@ -13,7 +13,7 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 12,
+      version: 13,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
@@ -27,6 +27,7 @@ class AppDatabase {
         await _addRunningTargets(database);
         await _addGymProgression(database);
         await _addHockeyStatistics(database);
+        await _addSessionCancellation(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
@@ -40,6 +41,7 @@ class AppDatabase {
         if (oldVersion < 10) await _addRunningTargets(database);
         if (oldVersion < 11) await _addGymProgression(database);
         if (oldVersion < 12) await _addHockeyStatistics(database);
+        if (oldVersion < 13) await _addSessionCancellation(database);
       },
     );
   }
@@ -382,6 +384,20 @@ class AppDatabase {
         });
       }
     }
+  }
+
+  Future<void> _addSessionCancellation(Database database) async {
+    await database.execute('''CREATE TABLE session_backups (
+      workout_id INTEGER PRIMARY KEY REFERENCES workouts(id) ON DELETE CASCADE,
+      snapshot TEXT NOT NULL
+    )''');
+    await database.execute('''CREATE TABLE mobility_cycles (
+      exercise_id INTEGER NOT NULL REFERENCES workout_exercises(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL CHECK(position >= 0),
+      amount INTEGER NOT NULL CHECK(amount >= 0),
+      confirmed INTEGER NOT NULL CHECK(confirmed IN (0,1)),
+      PRIMARY KEY(exercise_id, position)
+    )''');
   }
 
   Future<void> _addHockeyStatistics(Database database) async {

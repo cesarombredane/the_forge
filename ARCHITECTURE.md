@@ -20,7 +20,7 @@ lib/
 ├── features/
 │   ├── home/home_page.dart          Navigation, agenda/calendar, templates, history
 │   ├── templates/                  Template, completed workout, and exercise editor
-│   ├── workouts/                   Completion, resumable gym sessions, set entry
+│   ├── workouts/                   Completion, gym/mobility sessions, result entry
 │   ├── exercises/                  Exercise library, review and link correction
 │   ├── hockey/                     Opponent picker, statistics entry, resumable tournaments
 │   ├── performance/                Gym, running, and hockey charts
@@ -97,10 +97,11 @@ does not query SQLite directly. Repositories can be supplied to the controller;
 by default each uses the shared `AppDatabase.instance`.
 
 The database opens lazily as `the_forge.db` in the platform database directory.
-It enables foreign keys and currently uses schema version 12. There are fifteen
+It enables foreign keys and currently uses schema version 13. There are seventeen
 tables covering templates, workouts, their separate exercises, weekly targets
 and template links, weights, reminders, steps, a step goal, the exercise library,
-individual gym sets, hockey opponents, session statistics, and tournament games. History is a
+individual gym sets, hockey opponents, session statistics, tournament games,
+session cancellation snapshots, and mobility cycle results. History is a
 status-filtered view of workouts, not a separate table.
 
 ```mermaid
@@ -147,6 +148,18 @@ working-set values and confirmation flags beneath the workout's exercise rows.
 The session page queues writes in order, shows saving/failure state, and waits
 for outstanding writes before leaving or finishing. Invalid fields block exit;
 valid edits and the comment are saved without requiring workout completion.
+Cancel bypasses invalid-field validation, drains queued writes, then restores
+the pre-start snapshot through a repository transaction. The session stays
+planned with no start timestamp. Snapshot creation is part of starting and
+snapshots are removed when finishing or canceling.
+
+Mobility uses `MobilitySessionPage` with the same session engine as gym, rendering
+movements grouped by cycle. `Exercise.workingSets` carries mobility cycle amounts
+and confirmation flags with zero weight; repositories store them separately in
+`mobility_cycles`. The History editor preserves and edits individual cycle
+results. Existing aggregate-only history stays without per-cycle results.
+The sport filter is local HomePage state, retained across drawer navigation but
+not persisted across application restarts.
 
 `performance.dart` contains pure calculations over completed workout snapshots.
 The Performance feature renders local `CustomPainter` charts and persists the

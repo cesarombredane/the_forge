@@ -20,8 +20,12 @@ Create a template -> Schedule a workout -> Complete it -> Review history
   seven-day agenda or monthly calendar, and reschedule or delete them.
 - **Gym sessions:** start or resume a workout, see each exercise’s previous
   performance, and record individual working sets with automatic local saving.
+  Cancel to discard all progress and keep the workout scheduled.
+- **Mobility sessions:** start, resume, or cancel a routine; record and confirm
+  each movement in each cycle, then finish to add it to History.
 - **Completion and history:** record actual duration, adjust mobility exercise
   values, add a comment, and review or edit completed workouts in History.
+  Filter History by sport.
   Running completion records actual distance and compares
   duration, distance, and pace with the saved targets.
 - **Hockey:** record goals, assists, and plus-minus; save tournament games

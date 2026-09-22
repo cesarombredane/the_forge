@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:the_forge/data/local/app_database.dart';
 import 'package:the_forge/data/models/training.dart';
@@ -59,6 +60,8 @@ class WorkoutRepository {
     }
     if (workout.sport == Sport.gym)
       validateGymWorkout(workout, finishing: true);
+    if (workout.sport == Sport.mobility)
+      validateMobilityWorkout(workout, finishing: true, allowUnknown: true);
     final database = await _appDatabase.database;
     await database.transaction((transaction) async {
       final values = workout.toMap()
@@ -136,6 +139,7 @@ class WorkoutRepository {
           exercises.any((e) => e.weightMode == WeightMode.bodyweight)) {
         throw StateError('Record a bodyweight in Weight before starting.');
       }
+      await _backup(tx, rows.single, exercises);
       await tx.update(
         'workouts',
         {
@@ -187,6 +191,195 @@ class WorkoutRepository {
         whereArgs: [workout.id],
       );
       await _replaceExercises(tx, workout.id!, workout.exercises);
+      if (finish)
+        await tx.delete(
+          'session_backups',
+          where: 'workout_id = ?',
+          whereArgs: [workout.id],
+        );
+    });
+  }
+
+  Future<void> _backup(
+    Transaction tx,
+    Map<String, Object?> row,
+    List<Exercise> exercises,
+  ) async {
+    final data = {
+      'duration_minutes': row['duration_minutes'],
+      'comment': row['comment'],
+      'body_weight_kg': row['body_weight_kg'],
+      'exercises': [
+        for (final e in exercises)
+          {
+            'name': e.name,
+            'sets': e.sets,
+            'reps': e.reps,
+            'weight_kg': e.weightKg,
+            'unit': e.unit.name,
+            'per_side': e.perSide,
+            'library_id': e.libraryId,
+            'weight_mode': e.weightMode?.name,
+            'results': [for (final result in e.workingSets) result.toMap()],
+          },
+      ],
+    };
+    await tx.insert('session_backups', {
+      'workout_id': row['id'],
+      'snapshot': jsonEncode(data),
+    });
+  }
+
+  Future<void> cancelSession(int id) async {
+    final db = await _appDatabase.database;
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'workouts',
+        where:
+            "id = ? AND status = 'planned' AND sport IN ('gym','mobility') AND started_at IS NOT NULL",
+        whereArgs: [id],
+      );
+      if (rows.isEmpty)
+        throw StateError('This session is no longer in progress.');
+      final backups = await tx.query(
+        'session_backups',
+        where: 'workout_id = ?',
+        whereArgs: [id],
+      );
+      List<Exercise> exercises;
+      final values = <String, Object?>{
+        'started_at': null,
+        'body_weight_kg': null,
+        'comment': '',
+      };
+      if (backups.isNotEmpty) {
+        final data =
+            jsonDecode(backups.single['snapshot'] as String)
+                as Map<String, dynamic>;
+        for (final key in ['duration_minutes', 'comment', 'body_weight_kg']) {
+          values[key] = data[key];
+        }
+        exercises = (data['exercises'] as List).map((raw) {
+          final e = raw as Map<String, dynamic>;
+          return Exercise(
+            name: e['name'],
+            sets: e['sets'],
+            reps: e['reps'],
+            weightKg: (e['weight_kg'] as num).toDouble(),
+            unit: ExerciseUnit.values.byName(e['unit']),
+            perSide: e['per_side'],
+            libraryId: e['library_id'],
+            weightMode: e['weight_mode'] == null
+                ? null
+                : WeightMode.values.byName(e['weight_mode']),
+            workingSets: (e['results'] as List)
+                .map((r) => WorkingSet.fromMap(Map<String, Object?>.from(r)))
+                .toList(),
+          );
+        }).toList();
+      } else {
+        // Version-12 sessions have no pre-start duration snapshot.
+        exercises = (await _getExercises(tx, id))
+            .map(
+              (e) => e.copyWith(
+                workingSets: List.generate(
+                  e.sets,
+                  (_) => WorkingSet(amount: e.reps, weightKg: e.weightKg),
+                ),
+              ),
+            )
+            .toList();
+      }
+      await tx.update('workouts', values, where: 'id = ?', whereArgs: [id]);
+      await _replaceExercises(tx, id, exercises);
+      await tx.delete(
+        'session_backups',
+        where: 'workout_id = ?',
+        whereArgs: [id],
+      );
+    });
+  }
+
+  Future<void> startMobility(int id) async {
+    final db = await _appDatabase.database;
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'workouts',
+        where: "id = ? AND sport = 'mobility' AND status = 'planned'",
+        whereArgs: [id],
+      );
+      if (rows.isEmpty) throw StateError('This routine is no longer planned.');
+      final row = rows.single;
+      if (row['started_at'] != null) return;
+      final exercises = await _getExercises(tx, id);
+      if (exercises.isEmpty)
+        throw StateError('The routine needs at least one movement.');
+      await _backup(tx, row, exercises);
+      await _replaceExercises(
+        tx,
+        id,
+        exercises
+            .map(
+              (e) => e.copyWith(
+                workingSets: List.generate(
+                  row['cycle_count'] as int,
+                  (_) => WorkingSet(amount: e.reps, weightKg: 0),
+                ),
+              ),
+            )
+            .toList(),
+      );
+      await tx.update(
+        'workouts',
+        {'started_at': DateTime.now().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    });
+  }
+
+  Future<void> saveMobility(Workout workout, {bool finish = false}) async {
+    validateMobilityWorkout(workout, finishing: finish);
+    final db = await _appDatabase.database;
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'workouts',
+        where:
+            "id = ? AND sport = 'mobility' AND status = 'planned' AND started_at IS NOT NULL",
+        whereArgs: [workout.id],
+      );
+      if (rows.isEmpty)
+        throw StateError('This routine is no longer in progress.');
+      final old = await _getExercises(tx, workout.id!);
+      if (old.length != workout.exercises.length ||
+          rows.single['cycle_count'] != workout.cycleCount)
+        throw StateError('Movements and cycles are fixed.');
+      for (var i = 0; i < old.length; i++) {
+        final next = workout.exercises[i];
+        if (old[i].name != next.name ||
+            old[i].unit != next.unit ||
+            old[i].perSide != next.perSide ||
+            old[i].reps != next.reps)
+          throw StateError('Movement prescriptions are fixed.');
+      }
+      await tx.update(
+        'workouts',
+        {
+          'duration_minutes': workout.durationMinutes,
+          'comment': workout.comment,
+          if (finish) 'status': 'completed',
+          if (finish) 'completed_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [workout.id],
+      );
+      await _replaceExercises(tx, workout.id!, workout.exercises);
+      if (finish)
+        await tx.delete(
+          'session_backups',
+          where: 'workout_id = ?',
+          whereArgs: [workout.id],
+        );
     });
   }
 
@@ -212,8 +405,8 @@ class WorkoutRepository {
     required List<Exercise> exercises,
     double? distanceKm,
   }) async {
-    if (workout.sport == Sport.gym)
-      throw StateError('Use Start workout for gym sessions.');
+    if (workout.sport == Sport.gym || workout.sport == Sport.mobility)
+      throw StateError('Use the start/resume session workflow.');
     if (workout.sport == Sport.running &&
         (distanceKm == null || !distanceKm.isFinite || distanceKm <= 0)) {
       throw ArgumentError('A positive actual running distance is required.');
@@ -256,6 +449,12 @@ class WorkoutRepository {
         whereArgs: [row['id']],
         orderBy: 'position',
       );
+      final cycles = await database.query(
+        'mobility_cycles',
+        where: 'exercise_id = ?',
+        whereArgs: [row['id']],
+        orderBy: 'position',
+      );
       result.add(
         Exercise(
           name: row['name'] as String,
@@ -268,7 +467,17 @@ class WorkoutRepository {
           weightMode: row['weight_mode'] == null
               ? null
               : WeightMode.values.byName(row['weight_mode'] as String),
-          workingSets: sets.map(WorkingSet.fromMap).toList(),
+          workingSets: cycles.isNotEmpty
+              ? cycles
+                    .map(
+                      (r) => WorkingSet(
+                        amount: r['amount'] as int,
+                        weightKg: 0,
+                        confirmed: r['confirmed'] == 1,
+                      ),
+                    )
+                    .toList()
+              : sets.map(WorkingSet.fromMap).toList(),
         ),
       );
     }
@@ -280,6 +489,13 @@ class WorkoutRepository {
     int workoutId,
     List<Exercise> exercises,
   ) async {
+    final parent = await transaction.query(
+      'workouts',
+      columns: ['sport'],
+      where: 'id = ?',
+      whereArgs: [workoutId],
+    );
+    final sport = parent.single['sport'];
     await transaction.delete(
       'workout_exercises',
       where: 'workout_id = ?',
@@ -299,7 +515,22 @@ class WorkoutRepository {
         'unit': exercise.unit.name,
         'per_side': exercise.perSide ? 1 : 0,
       });
-      if (exercise.libraryId != null) {
+      if (sport == 'mobility' && exercise.workingSets.isNotEmpty) {
+        for (
+          var position = 0;
+          position < exercise.workingSets.length;
+          position++
+        ) {
+          final value = exercise.workingSets[position];
+          await transaction.insert('mobility_cycles', {
+            'exercise_id': exerciseId,
+            'position': position,
+            'amount': value.amount,
+            'confirmed': value.confirmed ? 1 : 0,
+          });
+        }
+      }
+      if (sport == 'gym') {
         final sets = exercise.prescribedSets;
         for (var position = 0; position < sets.length; position++) {
           await transaction.insert('gym_sets', {

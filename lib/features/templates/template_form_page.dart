@@ -1,3 +1,4 @@
+import 'package:the_forge/features/workouts/mobility_cycle_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:the_forge/app/app_controller.dart';
 import 'package:the_forge/features/exercises/exercises_page.dart';
@@ -383,6 +384,42 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
   Future<void> _editExercise({int? index, required bool mobility}) async {
     FocusScope.of(context).unfocus();
     Exercise? initial = index == null ? null : _exercises[index];
+    if (mobility && widget.workout != null && initial != null) {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('Edit cycle results'),
+                onTap: () => Navigator.pop(context, 'cycles'),
+              ),
+              ListTile(
+                title: const Text('Edit movement details'),
+                onTap: () => Navigator.pop(context, 'details'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || action == null) return;
+      if (action == 'cycles') {
+        final cycles = int.tryParse(_cycles.text);
+        if (cycles == null || cycles <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Enter a positive number of cycles first.'),
+            ),
+          );
+          return;
+        }
+        final result = await editMobilityCycles(context, initial, cycles);
+        if (mounted && result != null)
+          setState(() => _exercises[index!] = result);
+        return;
+      }
+    }
     LibraryExercise? library;
     if (!mobility) {
       library = widget.controller.exerciseLibrary
@@ -454,6 +491,8 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
                 .map((s) => s.copyWith(confirmed: true))
                 .toList(),
           )
+        : mobility && initial != null
+        ? result.copyWith(workingSets: initial.workingSets)
         : result;
     setState(() {
       if (index == null) {
@@ -553,6 +592,8 @@ class _TemplateFormPageState extends State<TemplateFormPage> {
       try {
         if (updated.sport == Sport.gym)
           validateGymWorkout(updated, finishing: true);
+        if (updated.sport == Sport.mobility)
+          validateMobilityWorkout(updated, finishing: true, allowUnknown: true);
       } catch (error) {
         ScaffoldMessenger.of(
           context,
@@ -788,6 +829,12 @@ class _ExerciseDialogState extends State<_ExerciseDialog> {
 }
 
 String _exerciseSummary(Exercise exercise, {required bool mobility}) {
+  if (mobility && exercise.workingSets.isNotEmpty) {
+    return [
+      for (var i = 0; i < exercise.workingSets.length; i++)
+        'Cycle ${i + 1}: ${exercise.workingSets[i].amount} ${exercise.unit.name}${exercise.workingSets[i].amount == 0 ? ' (skipped)' : ''}',
+    ].join(' / ');
+  }
   if (!mobility && exercise.workingSets.isNotEmpty) {
     return exercise.workingSets
         .map(

@@ -47,11 +47,9 @@ deletion require confirmation and are permanent.
 
 ## Completion and history
 
-Running and mobility completion accept a positive actual duration and optional
-comment. Hockey uses the session/game workflow described below.
-Existing mobility amount, unit, and per-side values can be adjusted. Gym uses
-the start/resume workflow described below. The dialog does not add/remove/rename
-exercises or change mobility cycles. Runs also accept a
+Running completion accepts a positive actual duration and optional comment.
+Gym and mobility use the start/resume workflows below; hockey has its own
+session/game workflow. Runs also accept a
 positive actual distance in km, with a decimal comma or dot. Duration remains
 a positive whole number of minutes. Both inputs start from the scheduled values.
 
@@ -78,7 +76,10 @@ remains editable as an actual result. A comparison cannot be recovered for those
 older runs.
 
 History displays completed workouts in descending **scheduled** date order, not
-completion-time order. Every completed session has Edit and Delete actions in its
+completion-time order. Select All, Gym, Running, Hockey, or Mobility to filter
+the list. The selection stays while navigating in the app and defaults to All
+after restarting. Empty results keep the filter available.
+Every completed session has Edit and Delete actions in its
 menu, including sessions whose source template was deleted. Edit opens the saved snapshot with
 its name, sport, training date/time, duration, description, warm-up, comment,
 and sport-specific fields. Gym and mobility exercises can be added, edited, removed, and reordered in
@@ -151,6 +152,42 @@ or deletion of that weigh-in do not change completed results.
 Historical gym sessions receive the latest weigh-in on or before their training
 timestamp during migration. If none exists, keep the record but supply its
 bodyweight snapshot through History before calculating bodyweight performance.
+
+## Canceling a gym or mobility session
+
+Cancel workout / Cancel routine asks for confirmation, then discards **all**
+progress since starting, including earlier saved visits. It restores the
+pre-start duration, comment, and exercise values and returns the session to not
+started while keeping it scheduled. Cancel works even with invalid input and
+waits for pending saves before resetting. Failed cancellation stays on screen
+with an error. Back and Save and leave continue to preserve progress for later.
+A separately recorded weigh-in remains in Weight.
+
+Gym sessions already in progress before version 13 cannot recover their original
+duration. Cancel resets their sets to the saved prescription, clears their
+comment/start/bodyweight snapshot, and keeps their current duration. New sessions
+restore exact pre-start values. Completed sessions cannot use this action.
+
+## Mobility sessions
+
+Planning offers Start routine and Resume routine. The session shows movements
+in order within each cycle, with reps or seconds and the per-side description.
+There are no load fields. Movement definitions and cycle counts remain fixed
+while training. Edit each actual amount and confirm completion, or enter zero
+to skip. Prefilled amounts are not confirmed results.
+
+Valid edits save automatically, including duration and comment. Save and leave
+or Back preserves progress across restarts; in-progress routines also appear
+in the agenda resume list outside its date window. Invalid input blocks saving
+and finishing, but Cancel routine can discard it. Finishing requires a positive
+duration and every movement in every cycle confirmed or skipped. Only finishing
+adds the routine to History.
+
+History displays per-cycle amounts. Editing a movement offers Edit cycle results
+or Edit movement details. Changing cycle count requires updating any recorded
+cycle results to match; applying a cycle-results editor records the displayed
+amounts. Older history keeps its aggregate values without invented cycle results.
+Mobility remains excluded from Performance.
 
 ## Hockey sessions and opponents
 

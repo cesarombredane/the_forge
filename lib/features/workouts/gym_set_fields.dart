@@ -11,6 +11,7 @@ class GymSetFields extends StatefulWidget {
     required this.index,
     required this.onChanged,
     this.confirmation = true,
+    this.mobility = false,
   });
   final WorkingSet value;
   final ExerciseUnit unit;
@@ -18,6 +19,7 @@ class GymSetFields extends StatefulWidget {
   final double? bodyweight;
   final int index;
   final bool confirmation;
+  final bool mobility;
   final ValueChanged<WorkingSet?> onChanged;
   @override
   State<GymSetFields> createState() => _GymSetFieldsState();
@@ -84,21 +86,22 @@ class _GymSetFieldsState extends State<GymSetFields> {
         Row(
           children: [
             SizedBox(width: 30, child: Text('${widget.index + 1}')),
-            Expanded(
-              child: TextFormField(
-                controller: _weight,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
+            if (!widget.mobility)
+              Expanded(
+                child: TextFormField(
+                  controller: _weight,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: widget.mode == WeightMode.bodyweight
+                        ? 'Adjustment kg'
+                        : 'Weight kg',
+                  ),
+                  onChanged: (_) => _change(),
                 ),
-                decoration: InputDecoration(
-                  labelText: widget.mode == WeightMode.bodyweight
-                      ? 'Adjustment kg'
-                      : 'Weight kg',
-                ),
-                onChanged: (_) => _change(),
               ),
-            ),
             const SizedBox(width: 10),
             Expanded(
               child: TextFormField(

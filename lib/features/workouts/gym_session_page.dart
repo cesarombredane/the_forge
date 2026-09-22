@@ -17,6 +17,7 @@ class GymSessionPage extends StatefulWidget {
 }
 
 class _GymSessionPageState extends State<GymSessionPage> {
+  bool get _mobility => widget.workout.sport == Sport.mobility;
   late Workout _workout = widget.workout;
   late final _duration = TextEditingController(
     text: '${_workout.durationMinutes}',
@@ -42,7 +43,7 @@ class _GymSessionPageState extends State<GymSessionPage> {
     });
     _pending = _pending.then((_) async {
       try {
-        await widget.controller.saveGym(snapshot);
+        await _persist(snapshot);
         if (mounted) setState(() => _error = null);
       } catch (error) {
         if (mounted) setState(() => _error = 'Could not save: $error');
@@ -50,6 +51,51 @@ class _GymSessionPageState extends State<GymSessionPage> {
         if (mounted) setState(() => _writes--);
       }
     });
+  }
+
+  Future<void> _persist(Workout workout, {bool finish = false}) => _mobility
+      ? widget.controller.saveMobility(workout, finish: finish)
+      : widget.controller.saveGym(workout, finish: finish);
+
+  Future<void> _cancel() async {
+    if (_busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_mobility ? 'Cancel routine?' : 'Cancel workout?'),
+        content: const Text(
+          'Discard all progress, including previously saved progress? The session will stay scheduled and return to not started.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep training'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard progress'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    // Drain saves before restoring the snapshot; no queued save can undo the reset.
+    await _pending;
+    try {
+      await widget.controller.cancelSession(_workout.id!);
+      if (!mounted) return;
+      setState(() => _leaving = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context);
+      });
+    } catch (error) {
+      if (mounted)
+        setState(() {
+          _busy = false;
+          _error = 'Could not cancel: $error';
+        });
+    }
   }
 
   Future<void> _exit({bool finish = false}) async {
@@ -63,8 +109,12 @@ class _GymSessionPageState extends State<GymSessionPage> {
     if (finish &&
         _workout.exercises.any((e) => e.workingSets.any((s) => !s.confirmed))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Confirm each set. Enter 0 for skipped sets.'),
+        SnackBar(
+          content: Text(
+            _mobility
+                ? 'Confirm each movement in every cycle. Enter 0 to skip.'
+                : 'Confirm each set. Enter 0 for skipped sets.',
+          ),
         ),
       );
       return;
@@ -77,7 +127,7 @@ class _GymSessionPageState extends State<GymSessionPage> {
       return;
     }
     try {
-      if (finish) await widget.controller.saveGym(_workout, finish: true);
+      if (finish) await _persist(_workout, finish: true);
       if (mounted) {
         setState(() => _leaving = true);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -100,7 +150,15 @@ class _GymSessionPageState extends State<GymSessionPage> {
       if (!didPop) _exit();
     },
     child: Scaffold(
-      appBar: AppBar(title: Text(_workout.title)),
+      appBar: AppBar(
+        title: Text(_workout.title),
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : _cancel,
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
       body: AbsorbPointer(
         absorbing: _busy,
         child: ListView(
@@ -123,13 +181,19 @@ class _GymSessionPageState extends State<GymSessionPage> {
               const SizedBox(height: 12),
               Text('Warm-up\n${_workout.warmup}'),
             ],
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'Working sets only. Check each completed set. Enter 0 reps/seconds to skip. Exercise and set counts stay fixed.',
+                _mobility
+                    ? 'Confirm each movement in each cycle. Enter 0 reps/seconds to skip. Movements and cycles stay fixed.'
+                    : 'Working sets only. Check each completed set. Enter 0 reps/seconds to skip. Exercise and set counts stay fixed.',
               ),
             ),
-            for (var i = 0; i < _workout.exercises.length; i++) _exercise(i),
+            if (_mobility)
+              for (var cycle = 0; cycle < _workout.cycleCount; cycle++)
+                _cycle(cycle)
+            else
+              for (var i = 0; i < _workout.exercises.length; i++) _exercise(i),
             const SizedBox(height: 16),
             TextFormField(
               controller: _duration,
@@ -169,14 +233,62 @@ class _GymSessionPageState extends State<GymSessionPage> {
             FilledButton.icon(
               onPressed: () => _exit(finish: true),
               icon: const Icon(Icons.check),
-              label: const Text('Finish workout'),
+              label: Text(_mobility ? 'Finish routine' : 'Finish workout'),
             ),
             TextButton(
               onPressed: () => _exit(),
               child: const Text('Save and leave — resume later'),
             ),
+            TextButton(
+              onPressed: _cancel,
+              child: Text(_mobility ? 'Cancel routine' : 'Cancel workout'),
+            ),
           ],
         ),
+      ),
+    ),
+  );
+
+  Widget _cycle(int cycle) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cycle ${cycle + 1}',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          for (var i = 0; i < _workout.exercises.length; i++) ...[
+            Text(
+              '${_workout.exercises[i].name}${_workout.exercises[i].perSide ? ' · per side' : ''}',
+            ),
+            GymSetFields(
+              key: ValueKey('mobility:$i:$cycle'),
+              value: _workout.exercises[i].workingSets[cycle],
+              unit: _workout.exercises[i].unit,
+              mode: null,
+              bodyweight: null,
+              index: i,
+              mobility: true,
+              onChanged: (value) {
+                final key = '$i:$cycle';
+                if (value == null) {
+                  setState(() => _invalid.add(key));
+                  return;
+                }
+                _invalid.remove(key);
+                final exercise = _workout.exercises[i];
+                final sets = List<WorkingSet>.of(exercise.workingSets)
+                  ..[cycle] = value;
+                final exercises = List<Exercise>.of(_workout.exercises)
+                  ..[i] = exercise.copyWith(workingSets: sets);
+                _workout = _workout.copyWith(exercises: exercises);
+                _save();
+              },
+            ),
+          ],
+        ],
       ),
     ),
   );

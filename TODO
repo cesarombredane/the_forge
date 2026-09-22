@@ -1,4 +1,1 @@
-- when a workout is started, i want to be able to cancel (leave without saving)
-- same for mobility routine
 - template should not define reps and weight anymore. new system based on progressive overload
-- in history, select by sport

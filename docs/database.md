@@ -7,7 +7,7 @@ of truth; controller collections are reloadable in-memory views.
 ## Opening and representation
 
 `AppDatabase.instance` lazily opens `the_forge.db` under `getDatabasesPath()` using
-`sqflite`. The current schema version is **12**. `onConfigure` enables foreign keys.
+`sqflite`. The current schema version is **13**. `onConfigure` enables foreign keys.
 `onCreate` builds the current schema using the schema helpers; `onUpgrade` runs
 the applicable version steps in order.
 
@@ -31,6 +31,8 @@ the applicable version steps in order.
 | `hockey_opponents` | `id`, `name`, `name_key`, `deleted`; normalized names unique among active opponents |
 | `hockey_records` | `workout_id` primary/foreign key, nullable `opponent_id`, nullable `goals`, `assists`, `plus_minus` |
 | `hockey_games` | `id`, `workout_id`, required `opponent_id`, `played_at`, positive `duration_minutes`, `goals`, `assists`, `plus_minus` |
+| `session_backups` | `workout_id` primary/foreign key, `snapshot` JSON containing pre-start duration, comment, bodyweight and exercise/results |
+| `mobility_cycles` | Composite key `exercise_id`, `position`; nonnegative `amount`, `confirmed` (0/1) |
 | `gym_sets` | Composite key `exercise_id`, `position`; `amount`, `weight_kg`, `confirmed` |
 | `weekly_requirements`          | `id`, `name`, `target_count`                                                                                                                                                                                |
 | `weekly_requirement_templates` | Composite primary key: `requirement_id`, `template_id`                                                                                                                                                      |
@@ -86,7 +88,10 @@ Gym library references are foreign keys with no deletion cascade; library items
 are archived instead of deleted. Deleting a workout cascades through exercises
 to gym sets. The legacy exercise `sets`, `reps`, and `weight_kg` columns retain
 prescriptions/old aggregate values; `gym_sets` is authoritative for actual gym
-sets and allows zero amounts. Mobility continues using the aggregate columns.
+sets and allows zero amounts. Mobility prescriptions and legacy history keep
+aggregate columns; new cycle results use `mobility_cycles`, with one row per
+movement per cycle, ordered by position. Both result tables cascade with their
+exercise rows.
 
 ## Atomic operations
 
@@ -97,8 +102,11 @@ sets and allows zero amounts. Mobility continues using the aggregate columns.
 | Schedule workout        | Insert copied template details and independent exercise rows         |
 | Complete workout        | Update status, actual duration/running distance, comment, completion time; replace exercises |
 | Edit completed workout  | Update snapshot fields and training date/comment; replace exercises |
-| Start gym session | Check reviewed exercise modes and required weigh-in; snapshot start/bodyweight |
-| Save/finish gym session | Update duration/comment/status and replace exercise/set snapshots atomically |
+| Start gym session | Check reviewed exercise modes and required weigh-in; save cancellation snapshot and start/bodyweight |
+| Start mobility session | Save cancellation snapshot, create unconfirmed cycle results, set start time |
+| Cancel gym/mobility session | Restore snapshot, clear start state, replace results, remove backup |
+| Save/finish mobility session | Save duration/comment/results; finish sets completion state and removes backup |
+| Save/finish gym session | Update duration/comment/status and replace exercise/set snapshots atomically; finish removes backup |
 | Save library exercise | Insert/update identity and resolve matching unclassified migration entries |
 | Save weekly requirement | Insert/update requirement and replace eligible-template links        |
 
@@ -127,6 +135,28 @@ through the general workout repository requires the row to still be planned
 and saves all related values atomically. Hockey uses the separate transactional
 completion/editing flow below.
 No backup/export or cloud sync is implemented.
+
+## Session cancellation and mobility
+
+`session_backups` and `mobility_cycles` cascade on workout/exercise deletion.
+Starting saves a JSON snapshot before any session edits; resuming never replaces
+it. Cancellation restores duration, comment, bodyweight, prescriptions, and
+results, clears `started_at`, and leaves status, schedule, identity, and template
+provenance intact. The snapshot is removed after canceling or finishing. A
+reschedule during a paused session remains in effect after cancellation.
+
+Already-started gym sessions upgraded from version 12 have no backup. Canceling
+these resets sets to their stored prescription and clears comment, start time,
+and bodyweight, retaining the current duration because its original value is
+unknown. No current template is used to reconstruct a scheduled workout.
+A weigh-in entered before starting remains an independent weight record.
+
+Mobility start creates one unconfirmed result per movement per cycle. Reps or
+seconds may be zero to represent a skip. Finishing requires every result to be
+confirmed. Session saves enforce the original movement order, units, per-side
+flags, prescriptions, and cycle count. History edits allow unknown per-cycle
+results on legacy entries; recorded results must match the edited cycle count.
+No bodyweight or load is stored for mobility results.
 
 ## Hockey persistence
 
@@ -167,6 +197,7 @@ performance calculations. Deleting a workout removes its hockey rows.
 | 10      | Nullable running target duration/distance; backfill pending runs only                  |
 | 11      | Exercise library, identity/mode links, individual gym sets, start/bodyweight snapshots |
 | 12      | Shared opponents, optional hockey statistics, individually saved tournament games |
+| 13      | Cancellation snapshots and individual mobility cycle results |
 
 Version 10 adds running target columns on both fresh creation and upgrade.
 Only pending running workouts are backfilled from their own duration/distance;
@@ -192,6 +223,10 @@ weigh-in is deleted. Started sessions keep `status = planned` until finished;
 Version 12 creates the three hockey tables and indexes on fresh creation and
 upgrade. It does not backfill statistics or opponents, rewrite durations, or
 change existing workouts. Older hockey results remain unknown until entered.
+
+Version 13 creates two tables on fresh creation and upgrade. It changes no
+existing workout or result rows and invents no historical cycle results.
+Existing gym sessions use the cancellation fallback described above.
 
 Fresh creation invokes schema helpers directly; the version-6 cleanup is needed
 only during upgrades. Column-addition helpers inspect `PRAGMA table_info` before

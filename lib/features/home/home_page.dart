@@ -1,3 +1,4 @@
+import 'package:the_forge/features/workouts/mobility_session_page.dart';
 import 'package:flutter/material.dart';
 import 'package:the_forge/data/models/hockey.dart';
 import 'package:the_forge/features/hockey/hockey_entry_dialog.dart';
@@ -181,7 +182,9 @@ class _HomePageState extends State<HomePage> {
     return Column(
       children: [
         for (final workout in widget.controller.planned.where(
-          (w) => w.sport == Sport.gym && w.startedAt != null,
+          (w) =>
+              (w.sport == Sport.gym || w.sport == Sport.mobility) &&
+              w.startedAt != null,
         ))
           ListTile(
             leading: const Icon(Icons.play_circle_outline),
@@ -292,7 +295,11 @@ class _HomePageState extends State<HomePage> {
                             _workoutDetails(workout) + _hockeySummary(workout),
                         description: workout.description,
                         warmup: workout.warmup,
-                        primaryLabel: workout.sport == Sport.gym
+                        primaryLabel: workout.sport == Sport.mobility
+                            ? (workout.startedAt == null
+                                  ? 'Start routine'
+                                  : 'Resume routine')
+                            : workout.sport == Sport.gym
                             ? (workout.startedAt == null
                                   ? 'Start workout'
                                   : 'Resume workout')
@@ -301,7 +308,9 @@ class _HomePageState extends State<HomePage> {
                                       HockeySessionType.tournament
                             ? 'Open tournament'
                             : 'Mark as done',
-                        primaryIcon: workout.sport == Sport.gym
+                        primaryIcon:
+                            (workout.sport == Sport.gym ||
+                                workout.sport == Sport.mobility)
                             ? Icons.play_arrow
                             : Icons.check,
                         onPrimary: () => _complete(workout),
@@ -318,42 +327,73 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Sport? _historySport;
+
   Widget _historyView() {
-    final workouts = widget.controller.completed;
-    if (workouts.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.history,
-        title: 'No history yet',
-        message: 'Completed workouts will appear here.',
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: workouts.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final workout = workouts[index];
-        return _TrainingCard(
-          title: workout.title,
-          sport: workout.sport,
-          subtitle:
-              '${_shortDate(workout.scheduledAt)} at ${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
-          details: _workoutDetails(workout) + _hockeySummary(workout),
-          description: workout.description,
-          warmup: workout.warmup,
-          comment: workout.comment,
-          runningComparison: workout.sport == Sport.running
-              ? RunningComparison(
-                  targetMinutes: workout.targetDurationMinutes,
-                  targetDistanceKm: workout.targetDistanceKm,
-                  actualMinutes: workout.durationMinutes,
-                  actualDistanceKm: workout.distanceKm,
+    final workouts = widget.controller.completed
+        .where((w) => _historySport == null || w.sport == _historySport)
+        .toList();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: DropdownButtonFormField<String>(
+            initialValue: _historySport?.name ?? 'all',
+            decoration: const InputDecoration(labelText: 'Sport'),
+            items: [
+              const DropdownMenuItem<String>(value: 'all', child: Text('All')),
+              for (final sport in Sport.values)
+                DropdownMenuItem<String>(
+                  value: sport.name,
+                  child: Text(sport.label),
+                ),
+            ],
+            onChanged: (value) => setState(
+              () => _historySport = value == 'all'
+                  ? null
+                  : Sport.values.byName(value!),
+            ),
+          ),
+        ),
+        Expanded(
+          child: workouts.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.history,
+                  title: 'No matching history',
+                  message:
+                      'Completed workouts for this sport will appear here.',
                 )
-              : null,
-          onEdit: () => _editWorkout(workout),
-          onDelete: () => _deleteWorkout(workout),
-        );
-      },
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: workouts.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final workout = workouts[index];
+                    return _TrainingCard(
+                      title: workout.title,
+                      sport: workout.sport,
+                      subtitle:
+                          '${_shortDate(workout.scheduledAt)} at ${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
+                      details:
+                          _workoutDetails(workout) + _hockeySummary(workout),
+                      description: workout.description,
+                      warmup: workout.warmup,
+                      comment: workout.comment,
+                      runningComparison: workout.sport == Sport.running
+                          ? RunningComparison(
+                              targetMinutes: workout.targetDurationMinutes,
+                              targetDistanceKm: workout.targetDistanceKm,
+                              actualMinutes: workout.durationMinutes,
+                              actualDistanceKm: workout.distanceKm,
+                            )
+                          : null,
+                      onEdit: () => _editWorkout(workout),
+                      onDelete: () => _deleteWorkout(workout),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -502,6 +542,27 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _complete(Workout workout) async {
+    if (workout.sport == Sport.mobility) {
+      try {
+        await widget.controller.startMobility(workout.id!);
+        if (!mounted) return;
+        final started = widget.controller.workouts.firstWhere(
+          (w) => w.id == workout.id,
+        );
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MobilitySessionPage(
+              controller: widget.controller,
+              workout: started,
+            ),
+          ),
+        );
+      } catch (_) {
+        if (mounted) _showError();
+      }
+      return;
+    }
     if (workout.sport == Sport.hockey) {
       await _openHockey(workout);
       return;
@@ -898,7 +959,11 @@ class _PlanningWorkoutTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: workout.sport == Sport.gym
+            tooltip: workout.sport == Sport.mobility
+                ? (workout.startedAt == null
+                      ? 'Start routine'
+                      : 'Resume routine')
+                : workout.sport == Sport.gym
                 ? (workout.startedAt == null
                       ? 'Start workout'
                       : 'Resume workout')
@@ -908,7 +973,7 @@ class _PlanningWorkoutTile extends StatelessWidget {
                 : 'Mark as done',
             onPressed: onComplete,
             icon: Icon(
-              workout.sport == Sport.gym
+              (workout.sport == Sport.gym || workout.sport == Sport.mobility)
                   ? Icons.play_circle_outline
                   : Icons.check_circle_outline,
             ),
@@ -1444,6 +1509,12 @@ String _details({
     lines.add('$cycleCount ${cycleCount == 1 ? 'cycle' : 'cycles'}');
   }
   for (final exercise in exercises) {
+    if (sport == Sport.mobility && exercise.workingSets.isNotEmpty) {
+      lines.add(
+        '${exercise.name}${exercise.perSide ? ' · per side' : ''}: ${[for (var i = 0; i < exercise.workingSets.length; i++) 'Cycle ${i + 1}: ${exercise.workingSets[i].amount} ${exercise.unit.name}${exercise.workingSets[i].amount == 0 ? ' (skipped)' : ''}'].join(' / ')}',
+      );
+      continue;
+    }
     if (sport == Sport.gym && exercise.workingSets.isNotEmpty) {
       lines.add(
         '${exercise.name}: ${exercise.workingSets.map((s) => '${_number(s.weightKg)} kg × ${s.amount} ${exercise.unit.name}${s.amount == 0 ? ' (skipped)' : ''}').join(' / ')}',

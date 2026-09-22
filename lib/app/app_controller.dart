@@ -139,6 +139,12 @@ class AppController extends ChangeNotifier {
       _exerciseRepository.links(id);
   Future<void> relinkExercise(ExerciseLink link, LibraryExercise target) =>
       _run(() => _exerciseRepository.relink(link, target));
+  Future<void> cancelSession(int id) =>
+      _run(() => _workoutRepository.cancelSession(id));
+  Future<void> startMobility(int id) =>
+      _run(() => _workoutRepository.startMobility(id));
+  Future<void> saveMobility(Workout workout, {bool finish = false}) =>
+      _run(() => _workoutRepository.saveMobility(workout, finish: finish));
   Future<void> startGym(int id) => _run(() => _workoutRepository.startGym(id));
   Future<void> saveGym(Workout workout, {bool finish = false}) =>
       _run(() => _workoutRepository.saveGym(workout, finish: finish));

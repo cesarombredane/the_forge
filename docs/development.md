@@ -128,6 +128,28 @@ Check overall/per-opponent totals, goals/assists charts, negative plus-minus,
 No opponent, deleted opponents, and August 31/September 1 season boundaries.
 Device checks should include narrow-screen forms and chart/table scrolling.
 
+## Cancellation, mobility, and History filtering checks
+
+Check fresh version-13 creation and version-12 upgrades with disposable data.
+Start a gym session, edit multiple sets/duration/comment, leave, resume, and
+cancel. Confirm the original scheduled values return, the start state clears,
+and restarting creates a new cancellation snapshot. Check already-started
+version-12 sessions retain their current duration on cancellation.
+
+Cancel with invalid input, pending writes, and a failed save; ensure queued
+writes cannot overwrite the reset. Declining confirmation keeps progress.
+Finishing and deleting sessions remove their backups. Check foreign-key integrity.
+
+Start a multi-cycle mobility routine, record differing values and zero skips,
+leave/restart/resume, finish, and edit individual cycle results in History.
+Unconfirmed results must block finishing. Cancel restores the scheduled routine.
+Existing aggregate-only history stays intact. Check fixed movement/cycle counts
+during sessions and history validation after changing cycle counts.
+
+Filter History by every sport and return to All. Verify empty results, ordering,
+edit/delete actions, and filter retention across drawer navigation. Run Flutter
+analysis, documentation build, and device checks where available.
+
 ## Android build notes
 
 The checked-in Gradle wrapper specifies Gradle 9.1.0. Settings declare Android

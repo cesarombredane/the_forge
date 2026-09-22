@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'hockey_performance_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:the_forge/app/app_controller.dart';
 import 'package:the_forge/data/models/training.dart';
@@ -11,16 +12,25 @@ class PerformancePage extends StatelessWidget {
   final AppController controller;
   @override
   Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
+    length: 3,
     child: Column(
       children: [
         const TabBar(
           tabs: [
             Tab(text: 'Gym'),
             Tab(text: 'Running'),
+            Tab(text: 'Hockey'),
           ],
         ),
-        Expanded(child: TabBarView(children: [_gym(context), _running()])),
+        Expanded(
+          child: TabBarView(
+            children: [
+              _gym(context),
+              _running(),
+              HockeyPerformanceTab(controller: controller),
+            ],
+          ),
+        ),
       ],
     ),
   );
@@ -214,10 +224,12 @@ class PerformanceChart extends StatefulWidget {
     required this.points,
     this.secondLabel,
     this.firstFormat,
+    this.sharedScale = false,
   });
   final String title;
   final String firstLabel;
   final String? secondLabel;
+  final bool sharedScale;
   final String Function(double)? firstFormat;
   final List<PerformancePoint> points;
   @override
@@ -290,6 +302,7 @@ class _PerformanceChartState extends State<PerformanceChart> {
                         index!,
                         widget.firstFormat,
                         widget.secondLabel != null,
+                        widget.sharedScale,
                       ),
                     ),
                   ),
@@ -338,11 +351,18 @@ double _fraction(List<PerformancePoint> points, int index) {
 }
 
 class _ChartPainter extends CustomPainter {
-  _ChartPainter(this.points, this.selected, this.format, this.dual);
+  _ChartPainter(
+    this.points,
+    this.selected,
+    this.format,
+    this.dual,
+    this.sharedScale,
+  );
   final List<PerformancePoint> points;
   final int selected;
   final String Function(double)? format;
   final bool dual;
+  final bool sharedScale;
   void _text(Canvas canvas, String text, Offset position, Color color) {
     final painter = TextPainter(
       text: TextSpan(
@@ -359,11 +379,22 @@ class _ChartPainter extends CustomPainter {
     final width = math.max(1.0, size.width - 92);
     final height = size.height - 36;
     final top = 8.0;
-    final maxFirst = math.max(1.0, points.map((p) => p.first).reduce(math.max));
-    final maxSecond = math.max(
+    final firstMin = math.min(0.0, points.map((p) => p.first).reduce(math.min));
+    final secondMin = math.min(
+      0.0,
+      points.map((p) => p.second ?? 0).reduce(math.min),
+    );
+    final minFirst = sharedScale ? math.min(firstMin, secondMin) : firstMin;
+    final minSecond = sharedScale ? minFirst : secondMin;
+    var maxFirst = math.max(1.0, points.map((p) => p.first).reduce(math.max));
+    var maxSecond = math.max(
       1.0,
       points.map((p) => p.second ?? 0).reduce(math.max),
     );
+    if (sharedScale) {
+      maxFirst = math.max(maxFirst, maxSecond);
+      maxSecond = maxFirst;
+    }
     for (var tick = 0; tick <= 4; tick++) {
       final fraction = tick / 4;
       final y = top + height * (1 - fraction);
@@ -374,26 +405,26 @@ class _ChartPainter extends CustomPainter {
       );
       _text(
         canvas,
-        format?.call(maxFirst * fraction) ??
-            (maxFirst * fraction).toStringAsFixed(1),
+        format?.call(minFirst + (maxFirst - minFirst) * fraction) ??
+            (minFirst + (maxFirst - minFirst) * fraction).toStringAsFixed(1),
         Offset(0, y - 6),
         Colors.amber,
       );
       if (dual)
         _text(
           canvas,
-          (maxSecond * fraction).toStringAsFixed(0),
+          (minSecond + (maxSecond - minSecond) * fraction).toStringAsFixed(0),
           Offset(size.width - 42, y - 6),
           Colors.cyanAccent,
         );
     }
-    void line(bool second, Color color, double maximum) {
+    void line(bool second, Color color, double minimum, double maximum) {
       final path = Path();
       for (var i = 0; i < points.length; i++) {
         final value = second ? points[i].second! : points[i].first;
         final point = Offset(
           46 + _fraction(points, i) * width,
-          top + height * (1 - value / maximum),
+          top + height * (1 - (value - minimum) / (maximum - minimum)),
         );
         if (i == 0) {
           path.moveTo(point.dx, point.dy);
@@ -411,8 +442,8 @@ class _ChartPainter extends CustomPainter {
       );
     }
 
-    line(false, Colors.amber, maxFirst);
-    if (dual) line(true, Colors.cyanAccent, maxSecond);
+    line(false, Colors.amber, minFirst, maxFirst);
+    if (dual) line(true, Colors.cyanAccent, minSecond, maxSecond);
     String date(DateTime d) => '${d.day}/${d.month}/${d.year}';
     _text(
       canvas,

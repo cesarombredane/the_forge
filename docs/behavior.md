@@ -47,10 +47,11 @@ deletion require confirmation and are permanent.
 
 ## Completion and history
 
-Non-gym completion accepts a positive actual duration and optional comment.
+Running and mobility completion accept a positive actual duration and optional
+comment. Hockey uses the session/game workflow described below.
 Existing mobility amount, unit, and per-side values can be adjusted. Gym uses
 the start/resume workflow described below. The dialog does not add/remove/rename
-exercises, change hockey details, or change mobility cycles. Runs also accept a
+exercises or change mobility cycles. Runs also accept a
 positive actual distance in km, with a decimal comma or dot. Duration remains
 a positive whole number of minutes. Both inputs start from the scheduled values.
 
@@ -151,12 +152,46 @@ Historical gym sessions receive the latest weigh-in on or before their training
 timestamp during migration. If none exists, keep the record but supply its
 bodyweight snapshot through History before calculating bodyweight performance.
 
+## Hockey sessions and opponents
+
+Completing a friendly or championship game requires an opponent, goals, assists,
+plus-minus, and a positive whole-game duration in minutes. Goals and assists
+are whole numbers of zero or more; plus-minus is a signed whole number.
+Training permits an optional opponent and a Record statistics switch. When on,
+all three statistics are required; when off, statistics are unknown, not zero.
+Coaching records duration and a training comment only.
+
+Create, rename, or delete opponents inside the opponent picker. Opponents are
+shared across training, games, and tournaments. Renaming updates displayed names
+everywhere. Deletion hides an opponent from new selections while keeping its
+historical records and performance filter. An existing link can be retained
+when editing. Reusing a deleted name creates a separate identity.
+
+Open a tournament from Planning and add games with individual opponents,
+date/time, whole-game durations, and statistics. Save each game independently,
+then leave and resume later. Saved games appear immediately in Performance, even
+while the tournament is planned. The agenda exposes resumable tournaments with
+saved games outside its current seven-day window. The comment saves when leaving
+through Back or Save and leave; unsaved game-dialog edits can be canceled.
+
+Finish requires at least one saved game. Duration and statistics are sums of
+its games. Games remain editable/deletable afterward, but a completed tournament
+must retain at least one game. The tournament parent adds no extra performance
+point. Older tournaments retain their duration and unknown statistics until games
+are entered; an empty game list shows zero recorded game minutes.
+
+History offers hockey statistics/game editing separately from workout details.
+Changing a workout date changes a standalone session’s performance date;
+tournament games keep their own dates. Changing sport/type retains the saved
+hockey data, but only records applicable to the current sport/type contribute.
+Older sessions have no invented opponent or zero statistics.
+
 ## Performance
 
-Performance has Gym and Running tabs. Hockey performance is deferred; mobility
-is excluded. All charts use completed sessions and chronological training dates.
+Performance has Gym, Running, and Hockey tabs; mobility is excluded. Gym and
+running charts use completed sessions and chronological training dates.
 Tapping a point or using the previous/next buttons shows the workout and exact
-values. History edits/deletions update charts. No date-range filter is implemented.
+values. History edits/deletions update charts. Gym and running have no date-range filter.
 
 Choose any library exercises to track in Gym; the selection is saved locally.
 Each exercise has two lines with separately labelled axes: highest effective
@@ -173,6 +208,19 @@ Running has three aligned charts: actual pace (min/km), distance (km), and durat
 (minutes), one point per completed run with valid duration and distance. These
 show results, not targets. Pace derives from the recorded whole-minute duration;
 there are no splits, GPS records, or additional timing precision.
+
+Hockey combines recorded training, friendly games, championship games, and
+tournament games. Coaching and unrecorded statistics are excluded. Explicit
+zeros count as recorded performances. Totals show goals, assists, points
+(goals + assists), and summed plus-minus. Goals/assists share a chart scale; a
+second chart shows signed plus-minus. Each session or tournament game is one
+chronological point. Filter totals/charts by opponent, including No opponent.
+The comparison table always includes every opponent in the selected period.
+
+All time includes every recorded result. This year means the current local
+hockey season, September 1 inclusive through the following September 1
+exclusive; the displayed dates clarify the range. Tournament games use their
+own dates. Deleted opponents remain available for historical filtering.
 
 ## Weekly requirements
 
@@ -239,5 +287,4 @@ can set or edit the goal, but does not offer removal.
 ## Scope
 
 All of these features use local storage. No accounts, cloud sync, automatic step
-counting, GPS recording, background notifications, gamification, or hockey
-performance statistics are implemented.
+counting, GPS recording, background notifications, or gamification are implemented.

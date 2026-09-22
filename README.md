@@ -15,7 +15,7 @@ Create a template -> Schedule a workout -> Complete it -> Review history
   Gym exercises come from a shared exercise library and support working sets,
   repetitions or seconds, loads, and per-side options.
   Running uses duration and distance to calculate pace. Hockey records session
-  type and details. Mobility repeats an ordered list of movements over cycles.
+  type, opponents, and game statistics. Mobility repeats an ordered list of movements over cycles.
 - **Planning:** schedule workouts at a date and time, view pending sessions in a
   seven-day agenda or monthly calendar, and reschedule or delete them.
 - **Gym sessions:** start or resume a workout, see each exercise’s previous
@@ -24,8 +24,11 @@ Create a template -> Schedule a workout -> Complete it -> Review history
   values, add a comment, and review or edit completed workouts in History.
   Running completion records actual distance and compares
   duration, distance, and pace with the saved targets.
+- **Hockey:** record goals, assists, and plus-minus; save tournament games
+  individually and resume the tournament later. Manage opponents inline.
 - **Performance:** choose gym exercises to graph their weight and total load;
-  follow running pace, distance, and duration over completed sessions.
+  follow running pace, distance, and duration over completed sessions; compare
+  hockey production overall and per opponent, all time or for the hockey season.
 - **Weekly plan:** set Monday-to-Sunday targets accepting one template or a group
   of templates. Both scheduled and completed sessions count toward these targets.
 - **Weight:** record weigh-ins, review history and a chart, and display a recurring

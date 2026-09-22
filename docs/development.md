@@ -109,6 +109,25 @@ No permanent automated test suite is included. Disposable validation harnesses
 may exercise migration, repository, calculation, and widget behavior without
 modifying production data or the repository's dependency manifests.
 
+## Hockey verification
+
+Use disposable data to check fresh version-12 creation and version-11 upgrades.
+Existing history must keep its duration and unknown statistics. Check foreign
+keys, normalized opponent names, global renaming, deletion with retained history,
+and rejection of deleted opponents on new entries.
+
+Complete games with signed plus-minus and explicit zeros; reject missing stats
+and opponents. Save training both with and without statistics and an opponent.
+Confirm coaching has no statistics. Save tournament games independently, leave,
+restart, and resume; verify summed durations, per-game dates, editing/deletion,
+and prevention of empty completion or deleting the last completed game.
+Check saved games appear before tournament completion without double-counting
+afterward. Verify History updates and workout deletion refresh Performance.
+
+Check overall/per-opponent totals, goals/assists charts, negative plus-minus,
+No opponent, deleted opponents, and August 31/September 1 season boundaries.
+Device checks should include narrow-screen forms and chart/table scrolling.
+
 ## Android build notes
 
 The checked-in Gradle wrapper specifies Gradle 9.1.0. Settings declare Android

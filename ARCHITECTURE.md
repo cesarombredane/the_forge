@@ -16,13 +16,14 @@ lib/
 ├── data/
 │   ├── local/app_database.dart      SQLite opening, creation, migrations
 │   ├── models/                     Domain objects, map conversion, performance calculations
-│   └── repositories/               Template, workout, exercise library, weight, steps, weekly targets
+│   └── repositories/               Template, workout, exercise library, hockey, weight, steps, weekly targets
 ├── features/
 │   ├── home/home_page.dart          Navigation, agenda/calendar, templates, history
 │   ├── templates/                  Template, completed workout, and exercise editor
 │   ├── workouts/                   Completion, resumable gym sessions, set entry
 │   ├── exercises/                  Exercise library, review and link correction
-│   ├── performance/                Gym and running charts
+│   ├── hockey/                     Opponent picker, statistics entry, resumable tournaments
+│   ├── performance/                Gym, running, and hockey charts
 │   ├── weekly_plan/                Requirement editor and progress calculation
 │   ├── weight/                     Weigh-ins, chart, reminder configuration
 │   └── steps/                      Daily entry, goal, seven-day summary
@@ -42,7 +43,7 @@ when the root is disposed. `MaterialApp` forces the dark theme.
 
 `AppController` extends Flutter's `ChangeNotifier`. It loads templates, workouts,
 weigh-ins, the weight reminder, daily steps, the step goal, weekly requirements,
-and the exercise library using `Future.wait`. It exposes unmodifiable collections or derived lists.
+the exercise library, opponents, hockey records, and tournament games using `Future.wait`. It exposes unmodifiable collections or derived lists.
 `planned` filters workouts by status; `completed` filters and reverses the
 repository's schedule-ordered list.
 
@@ -53,7 +54,7 @@ flowchart TD
     Root --> Home[HomePage / ListenableBuilder]
     Home --> Screens[Feature screens and dialogs]
     Screens -->|User operations| Controller
-    Controller --> Repositories[Six repositories]
+    Controller --> Repositories[Seven repositories]
     Repositories --> DB[AppDatabase / SQLite]
     DB -->|Query results| Repositories
     Repositories -->|Domain objects| Controller
@@ -96,10 +97,10 @@ does not query SQLite directly. Repositories can be supplied to the controller;
 by default each uses the shared `AppDatabase.instance`.
 
 The database opens lazily as `the_forge.db` in the platform database directory.
-It enables foreign keys and currently uses schema version 11. There are twelve
+It enables foreign keys and currently uses schema version 12. There are fifteen
 tables covering templates, workouts, their separate exercises, weekly targets
 and template links, weights, reminders, steps, a step goal, the exercise library,
-and individual gym sets. History is a
+individual gym sets, hockey opponents, session statistics, and tournament games. History is a
 status-filtered view of workouts, not a separate table.
 
 ```mermaid
@@ -153,6 +154,20 @@ chosen gym exercise IDs through the exercise repository. Charts use training
 dates, not completion timestamps. History edits flow through the normal reload
 and therefore update calculations. See [behavior](docs/behavior.md) for formulas,
 unknown-value handling, and previous-performance selection.
+
+## Hockey records and tournaments
+
+`hockey.dart` defines opponent identities, session statistics, tournament games,
+and pure performance/season calculations. `HockeyRepository` owns these writes,
+including transactional game changes with parent duration recalculation.
+`AppController` reloads these collections with the other app state.
+
+Hockey completion uses its own statistics dialog. Tournaments use a dedicated
+page whose child games persist individually while the parent remains planned.
+Performance counts saved games immediately, never the tournament parent itself.
+Opponent deletion is a soft deletion so historical identities remain intact.
+The shared chart painter supports negative values and a common goals/assists
+scale. No dependencies or remote services are added.
 
 ## Android boundary
 

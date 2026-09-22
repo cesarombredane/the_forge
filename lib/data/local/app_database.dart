@@ -13,7 +13,7 @@ class AppDatabase {
   Future<Database> _open() async {
     return openDatabase(
       join(await getDatabasesPath(), 'the_forge.db'),
-      version: 11,
+      version: 12,
       onConfigure: (database) => database.execute('PRAGMA foreign_keys = ON'),
       onCreate: (database, version) async {
         await _createWorkouts(database);
@@ -26,6 +26,7 @@ class AppDatabase {
         await _addWeeklyRequirementsSchema(database);
         await _addRunningTargets(database);
         await _addGymProgression(database);
+        await _addHockeyStatistics(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) await _addTemplateSchema(database);
@@ -38,6 +39,7 @@ class AppDatabase {
         if (oldVersion < 9) await _addWeeklyRequirementsSchema(database);
         if (oldVersion < 10) await _addRunningTargets(database);
         if (oldVersion < 11) await _addGymProgression(database);
+        if (oldVersion < 12) await _addHockeyStatistics(database);
       },
     );
   }
@@ -380,6 +382,40 @@ class AppDatabase {
         });
       }
     }
+  }
+
+  Future<void> _addHockeyStatistics(Database database) async {
+    await database.execute('''CREATE TABLE hockey_opponents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))
+    )''');
+    await database.execute(
+      'CREATE UNIQUE INDEX hockey_opponent_name ON hockey_opponents(name_key) WHERE deleted = 0',
+    );
+    await database.execute('''CREATE TABLE hockey_records (
+      workout_id INTEGER PRIMARY KEY REFERENCES workouts(id) ON DELETE CASCADE,
+      opponent_id INTEGER REFERENCES hockey_opponents(id),
+      goals INTEGER CHECK(goals >= 0),
+      assists INTEGER CHECK(assists >= 0),
+      plus_minus INTEGER,
+      CHECK((goals IS NULL AND assists IS NULL AND plus_minus IS NULL) OR
+        (goals IS NOT NULL AND assists IS NOT NULL AND plus_minus IS NOT NULL))
+    )''');
+    await database.execute('''CREATE TABLE hockey_games (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workout_id INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+      opponent_id INTEGER NOT NULL REFERENCES hockey_opponents(id),
+      played_at TEXT NOT NULL,
+      duration_minutes INTEGER NOT NULL CHECK(duration_minutes > 0),
+      goals INTEGER NOT NULL CHECK(goals >= 0),
+      assists INTEGER NOT NULL CHECK(assists >= 0),
+      plus_minus INTEGER NOT NULL
+    )''');
+    await database.execute(
+      'CREATE INDEX hockey_games_workout ON hockey_games(workout_id, played_at)',
+    );
   }
 
   Future<void> _addColumnIfMissing(

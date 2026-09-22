@@ -7,7 +7,7 @@ of truth; controller collections are reloadable in-memory views.
 ## Opening and representation
 
 `AppDatabase.instance` lazily opens `the_forge.db` under `getDatabasesPath()` using
-`sqflite`. The current schema version is **11**. `onConfigure` enables foreign keys.
+`sqflite`. The current schema version is **12**. `onConfigure` enables foreign keys.
 `onCreate` builds the current schema using the schema helpers; `onUpgrade` runs
 the applicable version steps in order.
 
@@ -28,6 +28,9 @@ the applicable version steps in order.
 | `workouts`                     | `id`, `template_id`, `title`, `sport`, `scheduled_at`, `duration_minutes`, `notes`, `warmup`, `details`, `status`, `comment`, `completed_at`, `hockey_type`, `distance_km`, `cycle_count`, `target_duration_minutes`, `target_distance_km`, `started_at`, `body_weight_kg`, legacy `cadence` |
 | `workout_exercises`            | `id`, `workout_id`, `position`, `name`, `sets`, `reps`, `weight_kg`, `unit`, `per_side`, `library_id`, `weight_mode`                                                                                                                     |
 | `exercise_library` | `id`, `name`, unique `name_key`, `unit`, `weight_mode`, `archived`, `tracked`, `needs_review` |
+| `hockey_opponents` | `id`, `name`, `name_key`, `deleted`; normalized names unique among active opponents |
+| `hockey_records` | `workout_id` primary/foreign key, nullable `opponent_id`, nullable `goals`, `assists`, `plus_minus` |
+| `hockey_games` | `id`, `workout_id`, required `opponent_id`, `played_at`, positive `duration_minutes`, `goals`, `assists`, `plus_minus` |
 | `gym_sets` | Composite key `exercise_id`, `position`; `amount`, `weight_kg`, `confirmed` |
 | `weekly_requirements`          | `id`, `name`, `target_count`                                                                                                                                                                                |
 | `weekly_requirement_templates` | Composite primary key: `requirement_id`, `template_id`                                                                                                                                                      |
@@ -120,8 +123,33 @@ it also writes actual distance to `distance_km`; original targets remain in
 `target_duration_minutes` and `target_distance_km`. Gym retains the exercise
 prescription alongside actual individual sets. Other sports do not retain
 separate planned and actual versions. Pace is calculated, not stored. Completion
-requires the row to still be planned and saves all related values atomically.
+through the general workout repository requires the row to still be planned
+and saves all related values atomically. Hockey uses the separate transactional
+completion/editing flow below.
 No backup/export or cloud sync is implemented.
+
+## Hockey persistence
+
+Session records and tournament games reference workouts with cascading deletion.
+Opponent references remain valid after soft deletion; deleted identities cannot
+be newly selected but may remain on an existing record during editing. Renaming
+changes the shared name. A deleted name may be reused as a new identity.
+
+Session statistics are all null or all present. Goals and assists are nonnegative;
+plus-minus is signed. No record or null statistics means unknown, not zero.
+The repository requires statistics and an opponent for friendly/championship
+games and excludes both from coaching. Training permits optional statistics and
+an optional opponent independently.
+
+Saving a session updates its statistics, duration, comment, and completion state
+in one transaction. Existing completion timestamps are retained. Saving/deleting
+a tournament game recalculates parent duration in the same transaction. With
+no child games, the existing positive parent duration is retained; it is not a
+recorded game duration. Finishing requires at least one game; the last game of a
+completed tournament cannot be deleted. Generic History detail edits preserve
+the child-duration sum whenever the workout is a tournament with games.
+Changing sport/type retains hockey rows but excludes inapplicable rows from
+performance calculations. Deleting a workout removes its hockey rows.
 
 ## Migration history
 
@@ -138,6 +166,7 @@ No backup/export or cloud sync is implemented.
 | 9       | Weekly requirements and eligible-template links                                       |
 | 10      | Nullable running target duration/distance; backfill pending runs only                  |
 | 11      | Exercise library, identity/mode links, individual gym sets, start/bodyweight snapshots |
+| 12      | Shared opponents, optional hockey statistics, individually saved tournament games |
 
 Version 10 adds running target columns on both fresh creation and upgrade.
 Only pending running workouts are backfilled from their own duration/distance;
@@ -159,6 +188,10 @@ Historical bodyweight is copied from the latest weigh-in no later than the
 scheduled timestamp. Missing weights remain null. No old workout, exercise, or
 weigh-in is deleted. Started sessions keep `status = planned` until finished;
 `started_at` distinguishes a resumable session without expanding the status enum.
+
+Version 12 creates the three hockey tables and indexes on fresh creation and
+upgrade. It does not backfill statistics or opponents, rewrite durations, or
+change existing workouts. Older hockey results remain unknown until entered.
 
 Fresh creation invokes schema helpers directly; the version-6 cleanup is needed
 only during upgrades. Column-addition helpers inspect `PRAGMA table_info` before

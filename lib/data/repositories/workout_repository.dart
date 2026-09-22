@@ -77,6 +77,21 @@ class WorkoutRepository {
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
       if (count != 1) throw StateError('Completed workout no longer exists.');
+      if (workout.sport == Sport.hockey &&
+          workout.hockeyType == HockeySessionType.tournament) {
+        final totals = await transaction.rawQuery(
+          'SELECT SUM(duration_minutes) AS total FROM hockey_games WHERE workout_id = ?',
+          [workout.id],
+        );
+        final total = totals.single['total'] as int?;
+        if (total != null)
+          await transaction.update(
+            'workouts',
+            {'duration_minutes': total},
+            where: 'id = ?',
+            whereArgs: [workout.id],
+          );
+      }
       await _replaceExercises(transaction, workout.id!, workout.exercises);
     });
   }

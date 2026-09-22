@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:the_forge/data/models/hockey.dart';
+import 'package:the_forge/data/repositories/hockey_repository.dart';
 import 'package:the_forge/data/repositories/exercise_repository.dart';
 import 'package:the_forge/data/models/training.dart';
 import 'package:the_forge/data/repositories/template_repository.dart';
@@ -20,6 +22,46 @@ class AppController extends ChangeNotifier {
        _stepRepository = stepRepository ?? StepRepository(),
        _weeklyRequirementRepository =
            weeklyRequirementRepository ?? WeeklyRequirementRepository();
+
+  final HockeyRepository _hockeyRepository = HockeyRepository();
+  List<Opponent> _opponents = [];
+  List<HockeyRecord> _hockeyRecords = [];
+  List<TournamentGame> _hockeyGames = [];
+  List<Opponent> get opponents => List.unmodifiable(_opponents);
+  List<HockeyRecord> get hockeyRecords => List.unmodifiable(_hockeyRecords);
+  List<TournamentGame> get hockeyGames => List.unmodifiable(_hockeyGames);
+  String opponentName(int? id) => id == null
+      ? 'No opponent'
+      : _opponents.where((o) => o.id == id).firstOrNull?.name ??
+            'Unknown opponent';
+
+  Future<int> saveOpponent(String name, {int? id}) async {
+    var result = 0;
+    await _run(() async {
+      result = await _hockeyRepository.saveOpponent(name, id: id);
+    });
+    return result;
+  }
+
+  Future<void> deleteOpponent(int id) =>
+      _run(() => _hockeyRepository.deleteOpponent(id));
+  Future<void> saveHockey(
+    Workout workout, {
+    required int? opponentId,
+    required HockeyStats? stats,
+  }) => _run(
+    () => _hockeyRepository.saveSession(
+      workout,
+      opponentId: opponentId,
+      stats: stats,
+    ),
+  );
+  Future<void> saveHockeyGame(TournamentGame game) =>
+      _run(() => _hockeyRepository.saveGame(game));
+  Future<void> deleteHockeyGame(TournamentGame game) =>
+      _run(() => _hockeyRepository.deleteGame(game));
+  Future<void> saveTournament(int id, String comment, {bool finish = false}) =>
+      _run(() => _hockeyRepository.saveTournament(id, comment, finish: finish));
 
   final ExerciseRepository _exerciseRepository = ExerciseRepository();
   final List<LibraryExercise> _library = [];
@@ -204,6 +246,9 @@ class AppController extends ChangeNotifier {
       _stepRepository.getDailyGoal(),
       _weeklyRequirementRepository.getAll(),
       _exerciseRepository.getAll(),
+      _hockeyRepository.opponents(),
+      _hockeyRepository.records(),
+      _hockeyRepository.games(),
     ]);
     _templates
       ..clear()
@@ -222,6 +267,9 @@ class AppController extends ChangeNotifier {
     _weeklyRequirements
       ..clear()
       ..addAll(results[6] as List<WeeklyRequirement>);
+    _opponents = results[8] as List<Opponent>;
+    _hockeyRecords = results[9] as List<HockeyRecord>;
+    _hockeyGames = results[10] as List<TournamentGame>;
     _library
       ..clear()
       ..addAll(results[7] as List<LibraryExercise>);

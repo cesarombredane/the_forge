@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:the_forge/data/models/hockey.dart';
+import 'package:the_forge/features/hockey/hockey_entry_dialog.dart';
+import 'package:the_forge/features/hockey/tournament_page.dart';
 import 'package:the_forge/features/exercises/exercises_page.dart';
 import 'package:the_forge/features/performance/performance_page.dart';
 import 'package:the_forge/features/workouts/gym_session_page.dart';
@@ -185,6 +188,17 @@ class _HomePageState extends State<HomePage> {
             title: Text('Resume ${workout.title}'),
             onTap: () => _complete(workout),
           ),
+        for (final workout in widget.controller.planned.where(
+          (w) =>
+              w.sport == Sport.hockey &&
+              w.hockeyType == HockeySessionType.tournament &&
+              widget.controller.hockeyGames.any((g) => g.workoutId == w.id),
+        ))
+          ListTile(
+            leading: const Icon(Icons.sports_hockey),
+            title: Text('Resume ${workout.title}'),
+            onTap: () => _openHockey(workout),
+          ),
         _WeeklyPlanAlert(
           controller: widget.controller,
           onOpen: () => setState(() => _page = _Page.weeklyPlan),
@@ -274,13 +288,18 @@ class _HomePageState extends State<HomePage> {
                         sport: workout.sport,
                         subtitle:
                             '${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
-                        details: _workoutDetails(workout),
+                        details:
+                            _workoutDetails(workout) + _hockeySummary(workout),
                         description: workout.description,
                         warmup: workout.warmup,
                         primaryLabel: workout.sport == Sport.gym
                             ? (workout.startedAt == null
                                   ? 'Start workout'
                                   : 'Resume workout')
+                            : workout.sport == Sport.hockey &&
+                                  workout.hockeyType ==
+                                      HockeySessionType.tournament
+                            ? 'Open tournament'
                             : 'Mark as done',
                         primaryIcon: workout.sport == Sport.gym
                             ? Icons.play_arrow
@@ -319,7 +338,7 @@ class _HomePageState extends State<HomePage> {
           sport: workout.sport,
           subtitle:
               '${_shortDate(workout.scheduledAt)} at ${_time(workout.scheduledAt)} · ${workout.durationMinutes} min',
-          details: _workoutDetails(workout),
+          details: _workoutDetails(workout) + _hockeySummary(workout),
           description: workout.description,
           warmup: workout.warmup,
           comment: workout.comment,
@@ -338,7 +357,68 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  String _hockeySummary(Workout workout) {
+    if (workout.sport != Sport.hockey ||
+        workout.hockeyType == HockeySessionType.coaching)
+      return '';
+    if (workout.hockeyType == HockeySessionType.tournament) {
+      final games = widget.controller.hockeyGames
+          .where((g) => g.workoutId == workout.id)
+          .toList();
+      if (games.isEmpty) return '\nStatistics not recorded';
+      final total = sumHockeyStats(games.map((g) => g.stats));
+      return '\n${games.length} games · ${total.goals} goals · ${total.assists} assists · ${signedHockey(total.plusMinus)} plus-minus';
+    }
+    final record = widget.controller.hockeyRecords
+        .where((r) => r.workoutId == workout.id)
+        .firstOrNull;
+    return '\n${widget.controller.opponentName(record?.opponentId)} · ${record?.stats == null ? 'Statistics not recorded' : '${record!.stats!.goals} goals · ${record.stats!.assists} assists · ${signedHockey(record.stats!.plusMinus)} plus-minus'}';
+  }
+
+  Future<void> _openHockey(Workout workout) async {
+    if (workout.hockeyType == HockeySessionType.tournament) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              TournamentPage(controller: widget.controller, workout: workout),
+        ),
+      );
+    } else {
+      await showHockeyEntry(context, widget.controller, workout);
+    }
+  }
+
   Future<void> _editWorkout(Workout workout) async {
+    if (workout.sport == Sport.hockey) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  workout.hockeyType == HockeySessionType.tournament
+                      ? 'Edit tournament games'
+                      : 'Edit statistics and duration',
+                ),
+                onTap: () => Navigator.pop(context, 'stats'),
+              ),
+              ListTile(
+                title: const Text('Edit workout details'),
+                onTap: () => Navigator.pop(context, 'details'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || choice == null) return;
+      if (choice == 'stats') {
+        await _openHockey(workout);
+        return;
+      }
+    }
     final result = await Navigator.push<Workout>(
       context,
       MaterialPageRoute(
@@ -422,6 +502,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _complete(Workout workout) async {
+    if (workout.sport == Sport.hockey) {
+      await _openHockey(workout);
+      return;
+    }
     if (workout.sport == Sport.gym) {
       if (workout.startedAt == null &&
           workout.exercises.any((e) => e.weightMode == WeightMode.bodyweight) &&
@@ -818,6 +902,9 @@ class _PlanningWorkoutTile extends StatelessWidget {
                 ? (workout.startedAt == null
                       ? 'Start workout'
                       : 'Resume workout')
+                : workout.sport == Sport.hockey &&
+                      workout.hockeyType == HockeySessionType.tournament
+                ? 'Open tournament'
                 : 'Mark as done',
             onPressed: onComplete,
             icon: Icon(

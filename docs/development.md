@@ -150,6 +150,17 @@ Filter History by every sport and return to All. Verify empty results, ordering,
 edit/delete actions, and filter retention across drawer navigation. Run Flutter
 analysis, documentation build, and device checks where available.
 
+## Automatic gym prescription verification
+
+With disposable data, finish an exercise shared by multiple templates and
+unstarted workouts with different set counts. Confirm all matching prescriptions
+and prefilled sets take the first-set reps/seconds and entered weight, while
+structure, started sessions, and history remain intact. Check bodyweight
+adjustments, skipped first sets, repeated identities, incompatible units/modes,
+and unrelated sports. Save or cancel without finishing and edit History: none
+should propagate. Force a propagation write failure and verify completion and
+all prescription updates roll back together.
+
 ## Android build notes
 
 The checked-in Gradle wrapper specifies Gradle 9.1.0. Settings declare Android

@@ -136,6 +136,19 @@ and saves all related values atomically. Hockey uses the separate transactional
 completion/editing flow below.
 No backup/export or cloud sync is implemented.
 
+## Gym completion propagation
+
+Within the existing gym completion transaction, update `template_exercises`
+and `workout_exercises` reps/weight for matching library identity, unit, and
+weight mode. Target parents must be gym templates or planned gym workouts
+with null `started_at`. Update those workouts’ `gym_sets` amounts/weights and
+clear confirmation flags while preserving row counts and positions.
+
+Use the first occurrence’s first confirmed, nonzero set. Do not substitute
+a later set when it is skipped. No history, active-session backup, or started
+workout is modified. Failure rolls back completion and all propagation writes
+together. Schema version remains 13; no migration or historical backfill occurs.
+
 ## Session cancellation and mobility
 
 `session_backups` and `mobility_cycles` cascade on workout/exercise deletion.

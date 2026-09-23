@@ -153,6 +153,27 @@ Historical gym sessions receive the latest weigh-in on or before their training
 timestamp during migration. If none exists, keep the record but supply its
 bodyweight snapshot through History before calculating bodyweight performance.
 
+## Automatic gym prescription updates
+
+Finishing a gym workout copies each exercise’s first working-set amount and
+entered weight to every matching gym template and planned gym workout that has
+not started, even across different source templates. All prefilled sets of an
+affected planned exercise receive that pair and remain unconfirmed. Set counts,
+movement order, dates, and other workout details stay unchanged. Matching uses
+the exercise library identity with compatible units and weight modes.
+
+The first occurrence of a repeated exercise supplies the reference. A skipped
+first set (zero amount) causes no update for that identity; later sets or
+occurrences are not substituted. Timed exercises copy seconds. Bodyweight
+exercises copy their entered adjustment, including negative assistance, rather
+than total effective load or bodyweight.
+
+Updates happen automatically only on finishing, with no extra controls. Saving,
+resuming, canceling, and History edits do not propagate. The most recently
+finished session supplies the values, regardless of its scheduled date. Started
+sessions and completed history keep their values. Ordinary template editing
+still does not propagate to scheduled workouts.
+
 ## Canceling a gym or mobility session
 
 Cancel workout / Cancel routine asks for confirmation, then discards **all**

@@ -191,6 +191,7 @@ class WorkoutRepository {
         whereArgs: [workout.id],
       );
       await _replaceExercises(tx, workout.id!, workout.exercises);
+      if (finish) await _propagateGymPrescriptions(tx, workout);
       if (finish)
         await tx.delete(
           'session_backups',
@@ -198,6 +199,42 @@ class WorkoutRepository {
           whereArgs: [workout.id],
         );
     });
+  }
+
+  Future<void> _propagateGymPrescriptions(
+    Transaction tx,
+    Workout workout,
+  ) async {
+    final seen = <int>{};
+    for (final exercise in workout.exercises) {
+      final id = exercise.libraryId;
+      // The first occurrence owns the reference, even when its first set is skipped.
+      if (id == null || !seen.add(id) || exercise.weightMode == null) continue;
+      final first = exercise.workingSets.firstOrNull;
+      if (first == null || !first.confirmed || first.amount <= 0) continue;
+      final match = [id, exercise.unit.name, exercise.weightMode!.name];
+      final values = {'reps': first.amount, 'weight_kg': first.weightKg};
+      await tx.update(
+        'template_exercises',
+        values,
+        where:
+            "library_id = ? AND unit = ? AND weight_mode = ? AND template_id IN (SELECT id FROM templates WHERE sport = 'gym')",
+        whereArgs: match,
+      );
+      const eligible =
+          "library_id = ? AND unit = ? AND weight_mode = ? AND workout_id IN (SELECT id FROM workouts WHERE sport = 'gym' AND status = 'planned' AND started_at IS NULL)";
+      // Update both the prescription and its prefilled sets without changing structure.
+      await tx.rawUpdate(
+        'UPDATE gym_sets SET amount = ?, weight_kg = ?, confirmed = 0 WHERE exercise_id IN (SELECT id FROM workout_exercises WHERE $eligible)',
+        [first.amount, first.weightKg, ...match],
+      );
+      await tx.update(
+        'workout_exercises',
+        values,
+        where: eligible,
+        whereArgs: match,
+      );
+    }
   }
 
   Future<void> _backup(

@@ -168,6 +168,14 @@ dates, not completion timestamps. History edits flow through the normal reload
 and therefore update calculations. See [behavior](docs/behavior.md) for formulas,
 unknown-value handling, and previous-performance selection.
 
+Gym completion also propagates each exercise’s first-set amount and entered
+weight to matching template prescriptions and unstarted planned gym workouts.
+`WorkoutRepository` performs these writes inside the completion transaction,
+including prefilled `gym_sets`. Matching requires the library identity, unit,
+and weight mode. `AppController` reloads the updated templates and workouts
+through its existing flow. This is an explicit exception to scheduled snapshot
+independence; started sessions and history remain independent.
+
 ## Hockey records and tournaments
 
 `hockey.dart` defines opponent identities, session statistics, tournament games,

@@ -20,7 +20,9 @@ Create a template -> Schedule a workout -> Complete it -> Review history
   seven-day agenda or monthly calendar, and reschedule or delete them.
 - **Gym sessions:** start or resume a workout, see each exercise’s previous
   performance, and record individual working sets with automatic local saving.
-  Cancel to discard all progress and keep the workout scheduled.
+  Cancel to discard all progress and keep the workout scheduled. Finishing
+  automatically carries first-set reps and weight into matching templates and
+  planned gym workouts that have not started.
 - **Mobility sessions:** start, resume, or cancel a routine; record and confirm
   each movement in each cycle, then finish to add it to History.
 - **Completion and history:** record actual duration, adjust mobility exercise
@@ -41,7 +43,9 @@ Create a template -> Schedule a workout -> Complete it -> Review history
   seven-day average with a configurable daily goal.
 
 Scheduling creates an independent copy of a template and its exercises. Later
-changes to or deletion of that template do not rewrite existing workouts.
+manual changes to or deletion of that template do not rewrite existing workouts.
+Gym completion updates matching exercise prescriptions as described in
+[behavior rules](docs/behavior.md).
 
 The app works offline: there is no backend, account, analytics service, or cloud
 synchronization. Steps are entered manually; weigh-in reminders do not generate
